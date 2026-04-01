@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}ZeroProbe{% endblock %} — Security Intelligence Platform</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<!-- ── SIDEBAR ─────────────────────────────────────────────────────────────── -->
+<aside class="sidebar" id="sidebar">
+
+  <!-- Logo -->
+  <div class="sb-logo">
+    <svg width="28" height="32" viewBox="0 0 28 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M14 0L0 5.6V16.8C0 24.64 6.3 31.36 14 32C21.7 31.36 28 24.64 28 16.8V5.6L14 0Z" fill="url(#shg)"/>
+      <line x1="8"  y1="16" x2="20" y2="16" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="14" y1="10" x2="14" y2="22" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="14" cy="16" r="4"   stroke="white" stroke-width="1.5" fill="none"/>
+      <circle cx="14" cy="16" r="1.5" fill="white"/>
+      <defs>
+        <linearGradient id="shg" x1="0" y1="0" x2="28" y2="32" gradientUnits="userSpaceOnUse">
+          <stop offset="0%"   stop-color="#3B82F6"/>
+          <stop offset="100%" stop-color="#06B6D4"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    <div class="sb-logo-text">
+      <div class="sb-logo-name">Zero<span>Probe</span></div>
+      <div class="sb-logo-tag">Security Intelligence</div>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <nav class="sb-nav">
+    <div class="sb-section">Scanning</div>
+    <a href="{{ url_for('home') }}"
+       class="nav-item {% if request.endpoint == 'home' %}active{% endif %}">
+      <i class="fa-solid fa-shield-halved"></i><span>Vuln Scanner</span>
+    </a>
+    <a href="{{ url_for('subdomains') }}"
+       class="nav-item {% if request.endpoint == 'subdomains' %}active{% endif %}">
+      <i class="fa-solid fa-sitemap"></i><span>Subdomain Enum</span>
+    </a>
+    <a href="{{ url_for('dirscan') }}"
+       class="nav-item {% if request.endpoint == 'dirscan' %}active{% endif %}">
+      <i class="fa-solid fa-folder-open"></i><span>Dir Brute-Force</span>
+    </a>
+
+    <div class="sb-section">Analytics</div>
+    <a href="{{ url_for('dashboard') }}"
+       class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+      <i class="fa-solid fa-chart-pie"></i><span>Dashboard</span>
+    </a>
+    <a href="{{ url_for('history') }}"
+       class="nav-item {% if request.endpoint == 'history' %}active{% endif %}">
+      <i class="fa-solid fa-clock-rotate-left"></i><span>Scan History</span>
+    </a>
+
+    <div class="sb-section">System</div>
+    <a href="{{ url_for('about') }}"
+       class="nav-item {% if request.endpoint == 'about' %}active{% endif %}">
+      <i class="fa-solid fa-circle-info"></i><span>About</span>
+    </a>
+  </nav>
+
+  <!-- Footer -->
+  <div class="sb-footer">
+    <div class="sb-status">
+      <span class="status-dot"></span>
+      <span>All Systems Online</span>
+    </div>
+    <div class="sb-ver">v2.0 · ZeroProbe · Dah Berrou © 2026</div>
+  </div>
+</aside>
+
+<!-- ── MAIN ─────────────────────────────────────────────────────────────────── -->
+<div class="main-wrap">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <button id="sidebarToggle" style="background:none;border:none;color:var(--text-muted);font-size:16px;cursor:pointer;padding:4px;display:none">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+    <div class="topbar-breadcrumb">
+      <span>{% block breadcrumb_parent %}ZeroProbe{% endblock %}</span>
+      <span class="breadcrumb-sep">/</span>
+      <span class="breadcrumb-cur">{% block breadcrumb_cur %}Home{% endblock %}</span>
+    </div>
+    <div class="topbar-right">
+      <div class="live-badge">
+        <span class="live-dot"></span>
+        Scanner Active
+      </div>
+    </div>
+  </header>
+
+  <!-- Page body -->
+  <div class="page-body">
+    {% block content %}{% endblock %}
+  </div>
+
+</div><!-- /main-wrap -->
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% block extra_scripts %}{% endblock %}
+
+<style>
+  /* Mobile sidebar toggle visibility */
+  @media (max-width: 900px) {
+    #sidebarToggle { display: block !important; }
+  }
+</style>
+</body>
+</html>

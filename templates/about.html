@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}About{% endblock %}
+{% block breadcrumb_cur %}About{% endblock %}
+
+{% block content %}
+
+<div class="page-header fade-up">
+  <div class="page-title">About ZeroProbe</div>
+  <div class="page-subtitle">Platform overview, technical stack, and feature documentation</div>
+</div>
+
+<!-- ── Hero ───────────────────────────────────────────────────────────────── -->
+<div class="card mb-4 fade-up" style="background:linear-gradient(135deg,rgba(59,130,246,0.07),rgba(6,182,212,0.04));">
+  <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px">
+    <svg width="44" height="50" viewBox="0 0 28 32" fill="none">
+      <path d="M14 0L0 5.6V16.8C0 24.64 6.3 31.36 14 32C21.7 31.36 28 24.64 28 16.8V5.6L14 0Z" fill="url(#shg2)"/>
+      <line x1="8"  y1="16" x2="20" y2="16" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="14" y1="10" x2="14" y2="22" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="14" cy="16" r="4"   stroke="white" stroke-width="1.5" fill="none"/>
+      <circle cx="14" cy="16" r="1.5" fill="white"/>
+      <defs>
+        <linearGradient id="shg2" x1="0" y1="0" x2="28" y2="32" gradientUnits="userSpaceOnUse">
+          <stop offset="0%"   stop-color="#3B82F6"/>
+          <stop offset="100%" stop-color="#06B6D4"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    <div>
+      <div style="font-size:22px;font-weight:700;color:var(--text)">ZeroProbe</div>
+      <div style="font-size:12px;color:var(--text-dim);font-family:var(--mono);letter-spacing:1.5px;text-transform:uppercase">Precision Security Intelligence</div>
+    </div>
+  </div>
+  <p style="font-size:13.5px;color:var(--text-sec);line-height:1.8;max-width:720px">
+    ZeroProbe is a professional-grade automated web vulnerability assessment platform designed for penetration testers
+    and security engineers. It combines active scanning with AI-powered analysis to identify and document
+    security weaknesses in web applications — outputting structured, actionable reports in both HTML and PDF formats.
+  </p>
+</div>
+
+<!-- ── Feature Grid ───────────────────────────────────────────────────────── -->
+<div class="grid-2 mb-4 fade-up" style="animation-delay:.05s">
+
+  <div class="card">
+    <div class="card-title"><i class="fa-solid fa-shield-halved" style="color:var(--blue-l)"></i> Scanning Modules</div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      {% set modules = [
+        ('fa-code',         'var(--red)',    'XSS Scanner',          'Reflected payload injection across 12 test vectors with risk classification'),
+        ('fa-database',     'var(--orange)', 'SQL Injection Scanner', 'Error-based and time-based blind detection across 18 payload variants'),
+        ('fa-shield',       'var(--blue-l)', 'Headers Audit',         '10 security headers with risk scoring and per-header remediation'),
+        ('fa-sitemap',      'var(--cyan)',   'Subdomain Enumeration', 'Concurrent DNS brute-force resolution across 60+ common subdomain names'),
+        ('fa-folder-open',  'var(--purple)', 'Directory Brute-Force', '29,000-entry wordlist with automated 403 bypass using IP-spoofing headers'),
+      ] %}
+      {% for icon, color, name, desc in modules %}
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="width:32px;height:32px;border-radius:var(--radius-sm);background:rgba(59,130,246,0.07);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="fa-solid {{ icon }}" style="color:{{ color }};font-size:13px"></i>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">{{ name }}</div>
+          <div style="font-size:12px;color:var(--text-muted)">{{ desc }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><i class="fa-solid fa-layer-group" style="color:var(--cyan)"></i> Technical Stack</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      {% set stack = [
+        ('Backend',   'Flask + SQLAlchemy',    'var(--blue-l)'),
+        ('Database',  'SQLite',                'var(--cyan)'),
+        ('Scanning',  'Requests + Threading',  'var(--purple)'),
+        ('AI Engine', 'OpenAI GPT-4o-mini',    'var(--amber)'),
+        ('Reports',   'ReportLab PDF',         'var(--red-l)'),
+        ('Frontend',  'Vanilla JS + CSS3',     'var(--green)'),
+        ('Icons',     'Font Awesome 6',        'var(--text-muted)'),
+        ('Charts',    'Chart.js 4',            'var(--orange)'),
+      ] %}
+      {% for label, value, color in stack %}
+      <div style="padding:10px;background:var(--bg-2);border-radius:var(--radius-sm);border:1px solid var(--border)">
+        <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">{{ label }}</div>
+        <div style="font-size:12.5px;font-weight:600;color:{{ color }};font-family:var(--mono)">{{ value }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Capabilities ────────────────────────────────────────────────────────── -->
+<div class="card mb-4 fade-up" style="animation-delay:.1s">
+  <div class="card-title"><i class="fa-solid fa-list-check" style="color:var(--green)"></i> Platform Capabilities</div>
+  <div class="grid-3" style="gap:12px">
+    {% set caps = [
+      ('fa-bolt',              'Real-Time Scanning',     'Server-Sent Events deliver live progress, stage updates, and log entries as scans execute.'),
+      ('fa-brain',             'AI-Powered Analysis',    'GPT-4o-mini generates vulnerability cards with risk descriptions, exploitation scenarios, and remediation steps.'),
+      ('fa-file-shield',       'Professional Reports',   'Full PDF reports with executive summary, findings tables, AI analysis, and per-vulnerability recommendations.'),
+      ('fa-clock-rotate-left', 'Scan History',           'Every scan persisted to SQLite with severity, counts, and duration for historical analysis and trending.'),
+      ('fa-chart-pie',         'Analytics Dashboard',    'Visualize scan trends and severity distribution using interactive Chart.js graphs.'),
+      ('fa-gauge-high',        'Risk Scoring',           'Weighted severity algorithm factors vulnerability type, technique, and count into a calibrated risk score.'),
+    ] %}
+    {% for icon, title, desc in caps %}
+    <div style="padding:14px;background:var(--bg-2);border-radius:var(--radius);border:1px solid var(--border)">
+      <i class="fa-solid {{ icon }}" style="color:var(--blue-l);font-size:16px;margin-bottom:8px;display:block"></i>
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">{{ title }}</div>
+      <div style="font-size:12px;color:var(--text-muted);line-height:1.7">{{ desc }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- ── Developer ──────────────────────────────────────────────────────────── -->
+<div class="card fade-up" style="animation-delay:.15s">
+  <div class="card-title"><i class="fa-solid fa-user-astronaut" style="color:var(--purple)"></i> Developer</div>
+  <div style="display:flex;align-items:center;gap:16px">
+    <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#3B82F6,#06B6D4);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:white;flex-shrink:0">D</div>
+    <div>
+      <div style="font-size:15px;font-weight:700;color:var(--text)">Dah Berrou</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Security Engineer · Full-Stack Developer</div>
+      <div style="font-size:11px;color:var(--text-dim);font-family:var(--mono);margin-top:4px">ZeroProbe v2.0 · © 2026 · All rights reserved</div>
+    </div>
+  </div>
+  <hr class="section-divider">
+  <p style="font-size:12.5px;color:var(--text-muted);line-height:1.8">
+    <i class="fa-solid fa-circle-exclamation" style="color:var(--amber);margin-right:6px"></i>
+    <strong style="color:var(--text-sec)">Legal Disclaimer:</strong>
+    ZeroProbe is intended exclusively for authorized security testing. Only scan systems and applications
+    you own or have explicit written permission to test. Unauthorized scanning of third-party systems may
+    violate applicable laws. The developer assumes no liability for misuse.
+  </p>
+</div>
+
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Subdomain Enum{% endblock %}
+{% block breadcrumb_cur %}Subdomain Enumeration{% endblock %}
+
+{% block content %}
+
+<div class="page-header fade-up">
+  <div class="page-title">Subdomain Enumeration</div>
+  <div class="page-subtitle">DNS brute-force discovery using 60+ common subdomain names with concurrent resolution</div>
+</div>
+
+<!-- ── Form ───────────────────────────────────────────────────────────────── -->
+<div class="card mb-4 fade-up">
+  <div class="card-title"><i class="fa-solid fa-sitemap" style="color:var(--cyan)"></i> Enumerate Subdomains</div>
+  <form method="POST" data-loading-form>
+    <div style="display:flex;gap:10px">
+      <div class="input-group" style="flex:1">
+        <span class="input-icon"><i class="fa-solid fa-globe"></i></span>
+        <input type="text" name="domain" class="inp"
+               placeholder="example.com  (no https://)"
+               value="{{ domain or '' }}" required>
+      </div>
+      <button type="submit" class="btn btn-primary"
+              data-loading-btn data-loading-text="Enumerating…">
+        <i class="fa-solid fa-magnifying-glass"></i> Enumerate
+      </button>
+    </div>
+    <div style="margin-top:12px;font-size:12px;color:var(--text-dim)">
+      <i class="fa-solid fa-circle-info" style="margin-right:5px"></i>
+      Enter the root domain only. Enumeration may take 15–30 seconds with concurrent DNS resolution.
+    </div>
+  </form>
+</div>
+
+<!-- ── Results ────────────────────────────────────────────────────────────── -->
+{% if results is not none %}
+<div class="card fade-up" style="animation-delay:.05s">
+  <div class="flex-b mb-3">
+    <div class="card-title" style="margin:0">
+      <i class="fa-solid fa-network-wired"></i>
+      Results for <span class="url-chip">{{ domain }}</span>
+    </div>
+    <span class="badge {% if results|length > 0 %}badge-vuln{% else %}badge-safe{% endif %}">
+      {{ results|length }} found
+    </span>
+  </div>
+
+  {% if results %}
+  <div style="overflow-x:auto">
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Subdomain</th>
+        <th>IP Address</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in results %}
+      <tr>
+        <td class="td-muted">{{ loop.index }}</td>
+        <td style="color:var(--blue-l);font-weight:600">{{ r.subdomain }}</td>
+        <td style="color:var(--cyan)">{{ r.ip }}</td>
+        <td><span class="badge badge-safe"><i class="fa-solid fa-check"></i> Resolved</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <i class="fa-solid fa-circle-xmark" style="color:var(--green)"></i>
+    No subdomains resolved for <span class="url-chip">{{ domain }}</span>
+    <p>All tested names returned NXDOMAIN or timed out.</p>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

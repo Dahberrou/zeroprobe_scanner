@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Vuln Scanner{% endblock %}
+{% block breadcrumb_cur %}Vulnerability Scanner{% endblock %}
+
+{% block content %}
+
+<div class="page-header fade-up">
+  <div class="page-title">Vulnerability Scanner</div>
+  <div class="page-subtitle">Automated XSS, SQL Injection, and Security Header analysis against any web target</div>
+</div>
+
+<!-- ── Scan Hero ─────────────────────────────────────────────────────────── -->
+<div class="scan-hero fade-up">
+  <div class="scan-hero-title"><i class="fa-solid fa-crosshairs" style="color:var(--cyan);margin-right:8px"></i>Launch New Scan</div>
+  <div class="scan-hero-sub">Enter the full target URL including protocol. Ensure you have authorization to scan the target.</div>
+
+  <form id="scanForm">
+    <div style="display:flex;gap:10px">
+      <div class="input-group" style="flex:1">
+        <span class="input-icon"><i class="fa-solid fa-globe"></i></span>
+        <input type="url" name="url" id="urlInput" class="inp"
+               placeholder="https://target.example.com" autocomplete="off" required>
+      </div>
+      <button type="submit" id="scanBtn" class="btn btn-primary btn-lg">
+        <i class="fa-solid fa-bolt"></i> Launch Scan
+      </button>
+    </div>
+  </form>
+
+  <!-- Scan Progress Panel -->
+  <div id="scanPanel" class="scan-panel">
+    <div class="scan-panel-header">
+      <span class="scan-pulse"></span>
+      <span class="scan-stage" id="scanStage">Initializing...</span>
+      <span class="scan-pct" id="scanPct">0%</span>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-bar" id="scanBar" style="width:0%"></div>
+    </div>
+    <div class="scan-stages mt-3">
+      <div class="stage-chip" id="stageXSS"><i class="fa-solid fa-code"></i> XSS Scanner</div>
+      <div class="stage-chip" id="stageSQLi"><i class="fa-solid fa-database"></i> SQLi Scanner</div>
+      <div class="stage-chip" id="stageHeaders"><i class="fa-solid fa-shield"></i> Headers Audit</div>
+      <div class="stage-chip" id="stageAI"><i class="fa-solid fa-brain"></i> AI Analysis</div>
+    </div>
+    <div class="scan-log mt-3" id="scanLog"></div>
+  </div>
+</div>
+
+<!-- ── Quick stats + Recent scans ──────────────────────────────────────── -->
+<div class="grid-2 mb-4 fade-up" style="animation-delay:.05s">
+
+  <!-- Quick stats -->
+  <div class="card">
+    <div class="card-title"><i class="fa-solid fa-chart-bar"></i> Platform Overview</div>
+    <div class="grid-3" style="gap:10px">
+      <div style="text-align:center;padding:12px;background:var(--bg-2);border-radius:var(--radius-sm)">
+        <div style="font-family:var(--mono);font-size:24px;font-weight:700;color:var(--text)">{{ stats.total }}</div>
+        <div style="font-size:10.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-top:3px">Total Scans</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--bg-2);border-radius:var(--radius-sm)">
+        <div style="font-family:var(--mono);font-size:24px;font-weight:700;color:var(--red)">{{ stats.critical }}</div>
+        <div style="font-size:10.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-top:3px">Critical</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--bg-2);border-radius:var(--radius-sm)">
+        <div style="font-family:var(--mono);font-size:24px;font-weight:700;color:var(--orange)">{{ stats.high }}</div>
+        <div style="font-size:10.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-top:3px">High</div>
+      </div>
+    </div>
+    <div class="mt-3" style="padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:11.5px;color:var(--text-dim);line-height:1.9">
+        <i class="fa-solid fa-circle-check" style="color:var(--green);margin-right:6px"></i>XSS injection detection with 12 payload vectors<br>
+        <i class="fa-solid fa-circle-check" style="color:var(--green);margin-right:6px"></i>SQL injection via error-based and time-based techniques<br>
+        <i class="fa-solid fa-circle-check" style="color:var(--green);margin-right:6px"></i>Security headers audit across 10 critical headers
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent scans -->
+  <div class="card">
+    <div class="flex-b mb-3">
+      <div class="card-title" style="margin:0"><i class="fa-solid fa-clock-rotate-left"></i> Recent Scans</div>
+      <a href="{{ url_for('history') }}" class="btn btn-ghost btn-sm">View All</a>
+    </div>
+    {% if recent %}
+      {% for rec in recent %}
+      <div class="recent-item">
+        <div class="recent-icon">
+          {% if rec.severity in ['critical','high'] %}<i class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i>
+          {% elif rec.severity == 'medium' %}<i class="fa-solid fa-shield-halved" style="color:var(--amber)"></i>
+          {% else %}<i class="fa-solid fa-shield-check" style="color:var(--green)"></i>{% endif %}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="recent-url" title="{{ rec.target_url }}">{{ rec.target_url }}</div>
+          <div class="recent-meta">{{ rec.timestamp.strftime('%Y-%m-%d %H:%M') }} · {{ rec.duration_s }}s</div>
+        </div>
+        <div class="recent-actions" style="display:flex;align-items:center;gap:6px">
+          <span class="badge badge-{{ rec.severity }}">{{ rec.severity }}</span>
+          <a href="{{ url_for('report', record_id=rec.id) }}" class="btn btn-ghost btn-sm" style="padding:4px 10px">
+            <i class="fa-solid fa-arrow-right" style="font-size:11px"></i>
+          </a>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-state" style="padding:28px 0">
+        <i class="fa-solid fa-radar" style="font-size:24px;margin-bottom:8px;display:block"></i>
+        No scans yet. Launch your first scan above.
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- ── Tool cards ─────────────────────────────────────────────────────────── -->
+<div class="grid-3 fade-up" style="animation-delay:.1s">
+  <a href="{{ url_for('subdomains') }}" class="card" style="text-decoration:none;cursor:pointer">
+    <div style="font-size:22px;margin-bottom:10px;color:var(--cyan)"><i class="fa-solid fa-sitemap"></i></div>
+    <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:5px">Subdomain Enumeration</div>
+    <div style="font-size:12px;color:var(--text-muted)">DNS brute-force discovery of subdomains using 60+ common names with concurrent resolution.</div>
+  </a>
+  <a href="{{ url_for('dirscan') }}" class="card" style="text-decoration:none;cursor:pointer">
+    <div style="font-size:22px;margin-bottom:10px;color:var(--purple)"><i class="fa-solid fa-folder-tree"></i></div>
+    <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:5px">Directory Brute-Force</div>
+    <div style="font-size:12px;color:var(--text-muted)">Discover hidden paths from a 29K-entry wordlist with automated 403 bypass techniques.</div>
+  </a>
+  <a href="{{ url_for('dashboard') }}" class="card" style="text-decoration:none;cursor:pointer">
+    <div style="font-size:22px;margin-bottom:10px;color:var(--amber)"><i class="fa-solid fa-chart-line"></i></div>
+    <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:5px">Analytics Dashboard</div>
+    <div style="font-size:12px;color:var(--text-muted)">Visualize scan history, severity trends, and aggregate vulnerability statistics over time.</div>
+  </a>
+</div>
+
+{% endblock %}

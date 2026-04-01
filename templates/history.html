@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Scan History{% endblock %}
+{% block breadcrumb_cur %}History{% endblock %}
+
+{% block content %}
+
+<div class="page-header fade-up">
+  <div class="page-title">Scan History</div>
+  <div class="page-subtitle">All recorded vulnerability scans, filterable by severity</div>
+</div>
+
+<!-- ── Filters ────────────────────────────────────────────────────────────── -->
+<div class="card mb-4 fade-up">
+  <form method="GET" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span style="font-size:13px;color:var(--text-muted)"><i class="fa-solid fa-filter"></i> Filter:</span>
+    {% for level in ['', 'critical', 'high', 'medium', 'low'] %}
+    <a href="?severity={{ level }}"
+       class="btn {% if sev_filter == level %}btn-primary{% else %}btn-ghost{% endif %} btn-sm">
+      {% if level == '' %}All
+      {% else %}<span class="badge badge-{{ level }}" style="font-size:10px;padding:1px 8px">{{ level|capitalize }}</span>{% endif %}
+    </a>
+    {% endfor %}
+    <span style="margin-left:auto;font-size:12px;color:var(--text-dim)">
+      {{ records.total }} total records
+    </span>
+  </form>
+</div>
+
+<!-- ── Table ──────────────────────────────────────────────────────────────── -->
+<div class="card fade-up" style="animation-delay:.05s">
+  {% if records.items %}
+  <div style="overflow-x:auto">
+  <table class="tbl tbl-normal">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Target URL</th>
+        <th>Scanned At</th>
+        <th>Severity</th>
+        <th>Score</th>
+        <th>XSS</th>
+        <th>SQLi</th>
+        <th>Headers</th>
+        <th>Duration</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for rec in records.items %}
+      <tr>
+        <td class="td-muted text-mono">{{ rec.id }}</td>
+        <td class="td-url" title="{{ rec.target_url }}" style="max-width:220px">
+          {{ rec.target_url[:55] }}{% if rec.target_url|length > 55 %}…{% endif %}
+        </td>
+        <td style="font-size:12px;color:var(--text-muted);white-space:nowrap">
+          {{ rec.timestamp.strftime('%Y-%m-%d') }}<br>
+          <span style="font-size:10.5px;color:var(--text-dim)">{{ rec.timestamp.strftime('%H:%M UTC') }}</span>
+        </td>
+        <td><span class="badge badge-{{ rec.severity }}">{{ rec.severity }}</span></td>
+        <td style="font-family:var(--mono);font-weight:700;color:
+          {% if rec.severity in ['critical','high'] %}var(--red)
+          {% elif rec.severity == 'medium' %}var(--amber)
+          {% else %}var(--green){% endif %}">{{ rec.risk_score }}</td>
+        <td style="font-family:var(--mono);color:{% if rec.xss_count > 0 %}var(--red-l){% else %}var(--text-dim){% endif %}">
+          {{ rec.xss_count }}
+        </td>
+        <td style="font-family:var(--mono);color:{% if rec.sqli_count > 0 %}var(--red-l){% else %}var(--text-dim){% endif %}">
+          {{ rec.sqli_count }}
+        </td>
+        <td style="font-family:var(--mono);color:{% if rec.headers_missing > 3 %}var(--amber){% else %}var(--text-dim){% endif %}">
+          {{ rec.headers_missing }} missing
+        </td>
+        <td style="font-size:12px;color:var(--text-dim)">{{ rec.duration_s }}s</td>
+        <td>
+          <div style="display:flex;gap:6px">
+            <a href="{{ url_for('report', record_id=rec.id) }}" class="btn btn-ghost btn-sm">
+              <i class="fa-solid fa-eye"></i>
+            </a>
+            <a href="{{ url_for('download_pdf', record_id=rec.id) }}" class="btn btn-ghost btn-sm">
+              <i class="fa-solid fa-file-pdf"></i>
+            </a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if records.pages > 1 %}
+  <div class="pagination mt-3">
+    {% if records.has_prev %}
+    <a href="?page={{ records.prev_num }}&severity={{ sev_filter }}" class="pag-btn">
+      <i class="fa-solid fa-chevron-left" style="font-size:11px"></i>
+    </a>
+    {% else %}
+    <span class="pag-btn disabled"><i class="fa-solid fa-chevron-left" style="font-size:11px"></i></span>
+    {% endif %}
+
+    {% for p in records.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+      {% if p %}
+        <a href="?page={{ p }}&severity={{ sev_filter }}"
+           class="pag-btn {% if p == records.page %}active{% endif %}">{{ p }}</a>
+      {% else %}
+        <span class="pag-btn disabled" style="padding:0 6px;border:none;background:none;color:var(--text-dim)">…</span>
+      {% endif %}
+    {% endfor %}
+
+    {% if records.has_next %}
+    <a href="?page={{ records.next_num }}&severity={{ sev_filter }}" class="pag-btn">
+      <i class="fa-solid fa-chevron-right" style="font-size:11px"></i>
+    </a>
+    {% else %}
+    <span class="pag-btn disabled"><i class="fa-solid fa-chevron-right" style="font-size:11px"></i></span>
+    {% endif %}
+
+    <span style="margin-left:auto;font-size:12px;color:var(--text-dim)">
+      Page {{ records.page }} / {{ records.pages }}
+    </span>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="empty-state">
+    <i class="fa-solid fa-database"></i>
+    No scans match the current filter.
+    <p><a href="{{ url_for('home') }}" class="btn btn-primary btn-sm mt-3">Launch a Scan</a></p>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

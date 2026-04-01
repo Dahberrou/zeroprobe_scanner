@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block breadcrumb_cur %}Dashboard{% endblock %}
+
+{% block content %}
+
+<div class="page-header fade-up">
+  <div class="page-title">Security Dashboard</div>
+  <div class="page-subtitle">Aggregate scan statistics, severity trends, and recent activity</div>
+</div>
+
+<!-- ── Stats Row ──────────────────────────────────────────────────────────── -->
+<div class="grid-4 mb-4 fade-up" style="animation-delay:.03s">
+  <div class="stat-card">
+    <div class="stat-label"><i class="fa-solid fa-radar" style="margin-right:5px"></i>Total Scans</div>
+    <div class="stat-value blue">{{ stats.total }}</div>
+    <div class="stat-sub">All-time</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label"><i class="fa-solid fa-circle-radiation" style="margin-right:5px"></i>Critical</div>
+    <div class="stat-value critical">{{ stats.critical }}</div>
+    <div class="stat-sub">Score ≥ 15</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label"><i class="fa-solid fa-triangle-exclamation" style="margin-right:5px"></i>High Risk</div>
+    <div class="stat-value high">{{ stats.high }}</div>
+    <div class="stat-sub">Score 8–14</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label"><i class="fa-solid fa-gauge" style="margin-right:5px"></i>Avg Score</div>
+    <div class="stat-value" style="color:var(--amber)">{{ stats.avg_score }}</div>
+    <div class="stat-sub">Risk score mean</div>
+  </div>
+</div>
+
+<!-- ── Charts ─────────────────────────────────────────────────────────────── -->
+<div class="grid-2 mb-4 fade-up" style="animation-delay:.06s">
+
+  <!-- Scans over time -->
+  <div class="card">
+    <div class="card-title"><i class="fa-solid fa-chart-line"></i> Scans Over Time (last 14 days)</div>
+    {% if stats.total > 0 %}
+    <div class="chart-wrap">
+      <canvas id="chartTimeline"></canvas>
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="fa-solid fa-chart-line"></i><p>No scan data yet. Run your first scan to see trends.</p></div>
+    {% endif %}
+  </div>
+
+  <!-- Severity distribution -->
+  <div class="card">
+    <div class="card-title"><i class="fa-solid fa-chart-pie"></i> Severity Distribution</div>
+    {% if stats.total > 0 %}
+    <div class="chart-wrap" style="height:200px;display:flex;align-items:center;justify-content:center">
+      <canvas id="chartSeverity" style="max-width:220px;max-height:200px"></canvas>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;justify-content:center">
+      {% if stats.critical %}<div style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted)"><span style="width:10px;height:10px;border-radius:50%;background:#EF4444;display:inline-block"></span>Critical ({{ stats.critical }})</div>{% endif %}
+      {% if stats.high %}<div style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted)"><span style="width:10px;height:10px;border-radius:50%;background:#F97316;display:inline-block"></span>High ({{ stats.high }})</div>{% endif %}
+      {% if stats.medium %}<div style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted)"><span style="width:10px;height:10px;border-radius:50%;background:#F59E0B;display:inline-block"></span>Medium ({{ stats.medium }})</div>{% endif %}
+      {% if stats.low %}<div style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted)"><span style="width:10px;height:10px;border-radius:50%;background:#10B981;display:inline-block"></span>Low ({{ stats.low }})</div>{% endif %}
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="fa-solid fa-chart-pie"></i><p>No scan data yet.</p></div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- ── Recent Scans Table ─────────────────────────────────────────────────── -->
+<div class="card fade-up" style="animation-delay:.09s">
+  <div class="flex-b mb-3">
+    <div class="card-title" style="margin:0"><i class="fa-solid fa-list-check"></i> Recent Scan Activity</div>
+    <a href="{{ url_for('history') }}" class="btn btn-ghost btn-sm">Full History</a>
+  </div>
+  {% if recent %}
+  <div style="overflow-x:auto">
+  <table class="tbl tbl-normal">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Target URL</th>
+        <th>Date</th>
+        <th>Severity</th>
+        <th>Score</th>
+        <th>XSS</th>
+        <th>SQLi</th>
+        <th>Hdrs</th>
+        <th>Duration</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for rec in recent %}
+      <tr>
+        <td class="td-muted">{{ rec.id }}</td>
+        <td class="td-url" title="{{ rec.target_url }}">{{ rec.target_url }}</td>
+        <td style="font-size:12px;color:var(--text-muted);white-space:nowrap">{{ rec.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td><span class="badge badge-{{ rec.severity }}">{{ rec.severity }}</span></td>
+        <td style="font-family:var(--mono);font-weight:700;color:
+          {% if rec.severity in ['critical','high'] %}var(--red)
+          {% elif rec.severity == 'medium' %}var(--amber)
+          {% else %}var(--green){% endif %}">{{ rec.risk_score }}</td>
+        <td style="font-family:var(--mono);color:{% if rec.xss_count > 0 %}var(--red-l){% else %}var(--text-dim){% endif %}">{{ rec.xss_count }}</td>
+        <td style="font-family:var(--mono);color:{% if rec.sqli_count > 0 %}var(--red-l){% else %}var(--text-dim){% endif %}">{{ rec.sqli_count }}</td>
+        <td style="font-family:var(--mono);color:{% if rec.headers_missing > 3 %}var(--amber){% else %}var(--text-dim){% endif %}">{{ rec.headers_missing }}</td>
+        <td style="font-size:12px;color:var(--text-dim)">{{ rec.duration_s }}s</td>
+        <td>
+          <a href="{{ url_for('report', record_id=rec.id) }}" class="btn btn-ghost btn-sm">View</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <i class="fa-solid fa-database"></i>
+    <p>No scans recorded yet.</p>
+    <a href="{{ url_for('home') }}" class="btn btn-primary btn-sm mt-3">Run First Scan</a>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const dailyData    = {{ daily_json | safe }};
+const severityData = {{ severity_json | safe }};
+
+Chart.defaults.color = '#64748B';
+Chart.defaults.font.family = "'JetBrains Mono', monospace";
+Chart.defaults.font.size = 11;
+
+const gridColor = 'rgba(255,255,255,0.05)';
+const tickColor = '#475569';
+
+// ── Timeline chart ─────────────────────────────────────────────────────────
+const ctxLine = document.getElementById('chartTimeline');
+if (ctxLine && dailyData.length) {
+  new Chart(ctxLine, {
+    type: 'line',
+    data: {
+      labels: dailyData.map(d => d.date),
+      datasets: [{
+        label: 'Scans',
+        data: dailyData.map(d => d.count),
+        borderColor: '#3B82F6',
+        backgroundColor: 'rgba(59,130,246,0.08)',
+        borderWidth: 2,
+        pointBackgroundColor: '#3B82F6',
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        fill: true,
+        tension: 0.4,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: tickColor } },
+        y: { grid: { color: gridColor }, ticks: { color: tickColor, stepSize: 1 }, beginAtZero: true },
+      },
+    },
+  });
+}
+
+// ── Donut chart ─────────────────────────────────────────────────────────────
+const ctxDonut = document.getElementById('chartSeverity');
+if (ctxDonut && Object.keys(severityData).length) {
+  const order  = ['critical','high','medium','low'];
+  const colors = { critical:'#EF4444', high:'#F97316', medium:'#F59E0B', low:'#10B981' };
+  const labels = [], data = [], bgs = [];
+  order.forEach(k => {
+    if (severityData[k]) {
+      labels.push(k.charAt(0).toUpperCase() + k.slice(1));
+      data.push(severityData[k]);
+      bgs.push(colors[k]);
+    }
+  });
+  new Chart(ctxDonut, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{ data, backgroundColor: bgs, borderWidth: 2, borderColor: '#0F1923', hoverOffset: 6 }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '68%',
+      plugins: { legend: { display: false } },
+    },
+  });
+}
+</script>
+{% endblock %}

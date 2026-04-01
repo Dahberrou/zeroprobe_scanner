@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block title %}Report #{{ record.id }}{% endblock %}
+{% block breadcrumb_parent %}<a href="{{ url_for('history') }}" style="color:var(--text-muted);text-decoration:none">History</a>{% endblock %}
+{% block breadcrumb_cur %}Report #{{ record.id }}{% endblock %}
+
+{% block content %}
+
+<!-- ── Report Header ───────────────────────────────────────────────────────── -->
+<div class="report-header fade-up">
+  <div class="flex-b" style="flex-wrap:wrap;gap:12px">
+    <div>
+      <div class="report-title"><i class="fa-solid fa-file-shield" style="color:var(--cyan);margin-right:8px"></i>Security Assessment Report</div>
+      <div class="url-chip mt-2" style="display:inline-block">{{ record.target_url }}</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="sev-badge-xl sev-{{ record.severity }}">{{ severity.level }}</span>
+      <a href="{{ url_for('download_pdf', record_id=record.id) }}" class="btn btn-ghost">
+        <i class="fa-solid fa-file-pdf"></i> Download PDF
+      </a>
+      <a href="{{ url_for('home') }}" class="btn btn-primary">
+        <i class="fa-solid fa-plus"></i> New Scan
+      </a>
+    </div>
+  </div>
+  <div class="report-meta">
+    <div class="meta-item"><i class="fa-solid fa-calendar"></i> {{ record.timestamp.strftime('%Y-%m-%d %H:%M UTC') }}</div>
+    <div class="meta-item"><i class="fa-solid fa-stopwatch"></i> {{ record.duration_s }}s scan duration</div>
+    <div class="meta-item"><i class="fa-solid fa-hashtag"></i> Record #{{ record.id }}</div>
+    <div class="meta-item"><i class="fa-solid fa-gauge-high"></i> Risk Score: <strong style="color:var(--text);margin-left:3px">{{ severity.issues }}</strong></div>
+  </div>
+</div>
+
+<!-- ── Summary Stats ──────────────────────────────────────────────────────── -->
+<div class="grid-4 mb-4 fade-up" style="animation-delay:.05s">
+  <div class="stat-card">
+    <div class="stat-label">Risk Score</div>
+    <div class="stat-value {% if severity.level in ['Critical','High'] %}critical{% elif severity.level=='Medium' %}medium{% else %}low{% endif %}">
+      {{ severity.issues }}
+    </div>
+    <div class="stat-sub">Weighted total</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">XSS Vulnerabilities</div>
+    <div class="stat-value {% if severity.xss_count > 0 %}high{% else %}low{% endif %}">{{ severity.xss_count }}</div>
+    <div class="stat-sub">/ {{ report.xss|length }} payloads</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">SQL Injection</div>
+    <div class="stat-value {% if severity.sqli_count > 0 %}critical{% else %}low{% endif %}">{{ severity.sqli_count }}</div>
+    <div class="stat-sub">/ {{ report.sqli|length }} payloads</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Missing Headers</div>
+    <div class="stat-value {% if severity.miss_headers > 3 %}high{% elif severity.miss_headers > 0 %}medium{% else %}low{% endif %}">{{ severity.miss_headers }}</div>
+    <div class="stat-sub">/ {{ report.headers|length }} headers</div>
+  </div>
+</div>
+
+<!-- ── XSS Results ────────────────────────────────────────────────────────── -->
+<div class="card mb-4 fade-up" style="animation-delay:.1s">
+  <div class="flex-b mb-3">
+    <div class="card-title" style="margin:0">
+      <i class="fa-solid fa-code" style="color:var(--red)"></i>
+      XSS Injection Results
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      {% set xss_vuln = report.xss | selectattr('vulnerable') | list %}
+      <span class="badge {% if xss_vuln %}badge-vuln{% else %}badge-safe{% endif %}">
+        {{ xss_vuln|length }} vulnerable
+      </span>
+      <span class="badge badge-gray">{{ report.xss|length }} tested</span>
+    </div>
+  </div>
+  {% if report.xss %}
+  <div style="overflow-x:auto">
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>Payload</th>
+        <th>Type</th>
+        <th>Parameter</th>
+        <th>Result</th>
+        <th>Risk</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for x in report.xss %}
+      <tr class="{% if x.get('vulnerable') %}tr-vuln{% elif not x.get('error') %}tr-safe{% endif %}">
+        <td title="{{ x.get('payload','') }}">{{ (x.get('payload') or x.get('error','—'))[:50] }}{% if (x.get('payload') or '')|length > 50 %}…{% endif %}</td>
+        <td>{{ x.get('type','—') }}</td>
+        <td><span class="badge badge-blue">{{ x.get('parameter','—') }}</span></td>
+        <td>
+          {% if x.get('error') %}<span class="badge badge-gray">Error</span>
+          {% elif x.get('vulnerable') %}<span class="badge badge-vuln"><i class="fa-solid fa-triangle-exclamation"></i> Vulnerable</span>
+          {% else %}<span class="badge badge-safe"><i class="fa-solid fa-check"></i> Safe</span>{% endif %}
+        </td>
+        <td>
+          {% if x.get('risk') and x.get('risk') != 'None' %}
+            <span class="badge badge-{{ x.get('risk','low')|lower }}">{{ x.get('risk') }}</span>
+          {% else %}
+            <span style="color:var(--text-dim)">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% if x.get('vulnerable') and x.get('recommendation') %}
+      <tr style="background:rgba(239,68,68,0.03)">
+        <td colspan="5" style="padding:8px 14px;font-family:var(--font);font-size:12px;color:var(--text-muted);border-top:none">
+          <i class="fa-solid fa-wrench" style="color:var(--amber);margin-right:6px"></i>
+          <strong style="color:var(--text-sec)">Remediation:</strong> {{ x.get('recommendation') }}
+        </td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty-state"><i class="fa-solid fa-check-circle" style="color:var(--green)"></i>No XSS data available.</div>
+  {% endif %}
+</div>
+
+<!-- ── SQLi Results ───────────────────────────────────────────────────────── -->
+<div class="card mb-4 fade-up" style="animation-delay:.15s">
+  <div class="flex-b mb-3">
+    <div class="card-title" style="margin:0">
+      <i class="fa-solid fa-database" style="color:var(--orange)"></i>
+      SQL Injection Results
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      {% set sqli_vuln = report.sqli | selectattr('vulnerable') | list %}
+      <span class="badge {% if sqli_vuln %}badge-vuln{% else %}badge-safe{% endif %}">
+        {{ sqli_vuln|length }} vulnerable
+      </span>
+      <span class="badge badge-gray">{{ report.sqli|length }} tested</span>
+    </div>
+  </div>
+  {% if report.sqli %}
+  <div style="overflow-x:auto">
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>Payload</th>
+        <th>Technique</th>
+        <th>DBMS</th>
+        <th>Detection</th>
+        <th>Result</th>
+        <th>Risk</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in report.sqli %}
+      <tr class="{% if s.get('vulnerable') %}tr-vuln{% elif not s.get('error') %}tr-safe{% endif %}">
+        <td title="{{ s.get('payload','') }}">{{ (s.get('payload') or s.get('error','—'))[:45] }}{% if (s.get('payload') or '')|length > 45 %}…{% endif %}</td>
+        <td style="font-size:11px">{{ s.get('technique','—') }}</td>
+        <td>{% if s.get('db_type') and s.get('db_type') != 'N/A' %}<span class="badge badge-cyan">{{ s.get('db_type') }}</span>{% else %}<span style="color:var(--text-dim)">—</span>{% endif %}</td>
+        <td style="font-size:11px;color:var(--text-muted)">{{ s.get('detection','—') }}</td>
+        <td>
+          {% if s.get('error') %}<span class="badge badge-gray">Error</span>
+          {% elif s.get('vulnerable') %}<span class="badge badge-vuln"><i class="fa-solid fa-triangle-exclamation"></i> Vulnerable</span>
+          {% else %}<span class="badge badge-safe"><i class="fa-solid fa-check"></i> Safe</span>{% endif %}
+        </td>
+        <td>
+          {% if s.get('risk') and s.get('risk') != 'None' %}
+            <span class="badge badge-{{ s.get('risk','low')|lower }}">{{ s.get('risk') }}</span>
+          {% else %}
+            <span style="color:var(--text-dim)">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% if s.get('vulnerable') and s.get('recommendation') %}
+      <tr style="background:rgba(239,68,68,0.03)">
+        <td colspan="6" style="padding:8px 14px;font-family:var(--font);font-size:12px;color:var(--text-muted);border-top:none">
+          <i class="fa-solid fa-wrench" style="color:var(--amber);margin-right:6px"></i>
+          <strong style="color:var(--text-sec)">Remediation:</strong> {{ s.get('recommendation') }}
+        </td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty-state"><i class="fa-solid fa-check-circle" style="color:var(--green)"></i>No SQLi data available.</div>
+  {% endif %}
+</div>
+
+<!-- ── Security Headers ───────────────────────────────────────────────────── -->
+<div class="card mb-4 fade-up" style="animation-delay:.2s">
+  <div class="flex-b mb-3">
+    <div class="card-title" style="margin:0">
+      <i class="fa-solid fa-shield" style="color:var(--blue-l)"></i>
+      Security Headers Audit
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      {% set miss = report.headers | selectattr('status','equalto','Missing') | list %}
+      <span class="badge {% if miss|length > 3 %}badge-vuln{% elif miss|length > 1 %}badge-medium{% else %}badge-safe{% endif %}">
+        {{ miss|length }} missing
+      </span>
+    </div>
+  </div>
+  {% if report.headers %}
+  <div style="overflow-x:auto">
+  <table class="tbl tbl-normal">
+    <thead>
+      <tr>
+        <th>Header</th>
+        <th>Status</th>
+        <th>Risk</th>
+        <th>Value / Recommendation</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for h in report.headers %}
+      {% if not h.get('error') %}
+      <tr class="{% if h.status == 'Missing' %}tr-vuln{% else %}tr-safe{% endif %}">
+        <td class="td-main" style="font-size:12.5px">{{ h.header }}</td>
+        <td>
+          {% if h.status == 'Missing' %}
+            <span class="badge badge-vuln"><i class="fa-solid fa-xmark"></i> Missing</span>
+          {% else %}
+            <span class="badge badge-safe"><i class="fa-solid fa-check"></i> Present</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if h.status == 'Missing' and h.get('risk') %}
+            <span class="badge badge-{{ h.get('risk','low')|lower }}">{{ h.get('risk') }}</span>
+          {% else %}
+            <span style="color:var(--green);font-size:11px">✓ Secured</span>
+          {% endif %}
+        </td>
+        <td style="font-size:12px;max-width:300px">
+          {% if h.status == 'Present' %}
+            <span class="text-mono" style="color:var(--green-l);font-size:11px">{{ h.value[:60] }}{% if h.value|length > 60 %}…{% endif %}</span>
+          {% else %}
+            <span style="color:var(--text-dim)">{{ h.get('recommendation','')[:80] }}{% if h.get('recommendation','')|length > 80 %}…{% endif %}</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty-state">No header data available.</div>
+  {% endif %}
+</div>
+
+<!-- ── AI Analysis ────────────────────────────────────────────────────────── -->
+{% if ai %}
+<div class="card fade-up" style="animation-delay:.25s">
+  <div class="flex-b mb-3">
+    <div class="card-title" style="margin:0">
+      <i class="fa-solid fa-brain" style="color:var(--purple)"></i>
+      AI Security Analysis
+    </div>
+    <span class="badge badge-blue">AI-Powered</span>
+  </div>
+  <div class="ai-box" id="aiBox">{{ ai }}</div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => colorizeAI('aiBox'));
+</script>
+{% endblock %}
