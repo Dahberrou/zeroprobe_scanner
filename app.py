@@ -7,8 +7,11 @@ import time
 import threading
 from datetime import datetime
 from flask import (Flask, render_template, request, jsonify,
-                   Response, send_file, redirect, url_for)
+                   Response, send_file, redirect, url_for, flash, abort)
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import (LoginManager, UserMixin, login_user,
+                         logout_user, login_required, current_user)
+from werkzeug.security import generate_password_hash, check_password_hash
 from scanner.xss_scanner     import scan_xss
 from scanner.sqli_scanner    import scan_sqli
 from scanner.headers_scanner import scan_headers
@@ -19,13 +22,38 @@ from utils.severity     import calculate_severity
 from utils.pdf_report   import generate_pdf
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+app.secret_key = os.environ.get('SECRET_KEY', 'zeroprobe-dev-secret-change-in-prod')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///zeroprobe.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Please log in to access this page.'
 
-# ── Model ─────────────────────────────────────────────────────────────────────
+
+# ── Models ────────────────────────────────────────────────────────────────────
+class User(UserMixin, db.Model):
+    __tablename__ = 'users'
+    id            = db.Column(db.Integer, primary_key=True)
+    username      = db.Column(db.String(80), unique=True, nullable=False)
+    email         = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    scans         = db.relationship('ScanRecord', backref='owner', lazy=True)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+
 class ScanRecord(db.Model):
     __tablename__ = 'scan_records'
     id              = db.Column(db.Integer, primary_key=True)
@@ -40,6 +68,7 @@ class ScanRecord(db.Model):
     report_json     = db.Column(db.Text)
     ai_analysis     = db.Column(db.Text)
     duration_s      = db.Column(db.Float, default=0.0)
+    user_id         = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
 
 with app.app_context():
@@ -49,19 +78,75 @@ with app.app_context():
 _progress: dict = {}
 
 
+# ── Auth Routes ───────────────────────────────────────────────────────────────
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('home'))
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        email    = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        confirm  = request.form.get('confirm_password', '')
+
+        if not username or not email or not password:
+            flash('All fields are required.', 'error')
+        elif password != confirm:
+            flash('Passwords do not match.', 'error')
+        elif User.query.filter_by(username=username).first():
+            flash('Username already taken.', 'error')
+        elif User.query.filter_by(email=email).first():
+            flash('Email already registered.', 'error')
+        else:
+            user = User(username=username, email=email)
+            user.set_password(password)
+            db.session.add(user)
+            db.session.commit()
+            login_user(user)
+            return redirect(url_for('home'))
+    return render_template('register.html')
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('home'))
+    if request.method == 'POST':
+        identifier = request.form.get('identifier', '').strip()
+        password   = request.form.get('password', '')
+        user = (User.query.filter_by(email=identifier.lower()).first() or
+                User.query.filter_by(username=identifier).first())
+        if user and user.check_password(password):
+            login_user(user, remember=request.form.get('remember') == 'on')
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('home'))
+        flash('Invalid credentials.', 'error')
+    return render_template('login.html')
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 @app.route('/')
+@login_required
 def home():
-    recent = ScanRecord.query.order_by(ScanRecord.timestamp.desc()).limit(5).all()
+    q = ScanRecord.query.filter_by(user_id=current_user.id)
+    recent = q.order_by(ScanRecord.timestamp.desc()).limit(5).all()
     stats = {
-        'total':    ScanRecord.query.count(),
-        'critical': ScanRecord.query.filter_by(severity='critical').count(),
-        'high':     ScanRecord.query.filter_by(severity='high').count(),
+        'total':    q.count(),
+        'critical': q.filter_by(severity='critical').count(),
+        'high':     q.filter_by(severity='high').count(),
     }
     return render_template('index.html', recent=recent, stats=stats)
 
 
 @app.route('/scan', methods=['POST'])
+@login_required
 def scan():
     url = request.form.get('url', '').strip()
     if not url:
@@ -74,6 +159,7 @@ def scan():
         'status': 'running', 'progress': 0,
         'stage': 'Initializing scanner...', 'logs': []
     }
+    _owner_id = current_user.id  # capture before thread (request context won't exist inside thread)
 
     def _log(msg):
         ts = datetime.now().strftime('%H:%M:%S')
@@ -126,7 +212,8 @@ def scan():
                     headers_missing=missing,
                     report_json=json.dumps(report),
                     ai_analysis=ai,
-                    duration_s=round(time.time() - start, 1)
+                    duration_s=round(time.time() - start, 1),
+                    user_id=_owner_id
                 )
                 db.session.add(rec)
                 db.session.commit()
@@ -148,6 +235,7 @@ def scan():
 
 
 @app.route('/scan-progress/<scan_id>')
+@login_required
 def scan_progress(scan_id):
     def stream():
         while True:
@@ -163,8 +251,11 @@ def scan_progress(scan_id):
 
 
 @app.route('/report/<int:record_id>')
+@login_required
 def report(record_id):
     rec = ScanRecord.query.get_or_404(record_id)
+    if rec.user_id != current_user.id:
+        abort(403)
     report_data = json.loads(rec.report_json)
     sev = calculate_severity(report_data)
     return render_template('report.html', record=rec,
@@ -172,8 +263,11 @@ def report(record_id):
 
 
 @app.route('/report/<int:record_id>/pdf')
+@login_required
 def download_pdf(record_id):
     rec = ScanRecord.query.get_or_404(record_id)
+    if rec.user_id != current_user.id:
+        abort(403)
     report_data = json.loads(rec.report_json)
     sev = calculate_severity(report_data)
     path = generate_pdf(report=report_data, severity=sev, ai_report=rec.ai_analysis)
@@ -182,23 +276,29 @@ def download_pdf(record_id):
 
 
 @app.route('/dashboard')
+@login_required
 def dashboard():
     from sqlalchemy import func
-    total  = ScanRecord.query.count()
+    uid = current_user.id
+    base_q = ScanRecord.query.filter_by(user_id=uid)
+    total  = base_q.count()
     by_sev = dict(
         db.session.query(ScanRecord.severity, func.count(ScanRecord.id))
+        .filter(ScanRecord.user_id == uid)
         .group_by(ScanRecord.severity).all()
     )
-    recent = ScanRecord.query.order_by(ScanRecord.timestamp.desc()).limit(10).all()
+    recent = base_q.order_by(ScanRecord.timestamp.desc()).limit(10).all()
     daily_raw = (
         db.session.query(
             func.strftime('%Y-%m-%d', ScanRecord.timestamp).label('day'),
             func.count(ScanRecord.id).label('cnt')
         )
+        .filter(ScanRecord.user_id == uid)
         .group_by('day').order_by('day').limit(14).all()
     )
     daily = [{'date': r.day, 'count': r.cnt} for r in daily_raw]
-    avg_score = db.session.query(func.avg(ScanRecord.risk_score)).scalar() or 0
+    avg_score = (db.session.query(func.avg(ScanRecord.risk_score))
+                 .filter(ScanRecord.user_id == uid).scalar() or 0)
     stats = {
         'total':     total,
         'critical':  by_sev.get('critical', 0),
@@ -213,10 +313,11 @@ def dashboard():
 
 
 @app.route('/history')
+@login_required
 def history():
     page       = request.args.get('page', 1, type=int)
     sev_filter = request.args.get('severity', '')
-    q = ScanRecord.query.order_by(ScanRecord.timestamp.desc())
+    q = ScanRecord.query.filter_by(user_id=current_user.id).order_by(ScanRecord.timestamp.desc())
     if sev_filter:
         q = q.filter_by(severity=sev_filter)
     records = q.paginate(page=page, per_page=20, error_out=False)
@@ -224,6 +325,7 @@ def history():
 
 
 @app.route('/subdomains', methods=['GET', 'POST'])
+@login_required
 def subdomains():
     results, domain = None, ''
     if request.method == 'POST':
@@ -235,6 +337,7 @@ def subdomains():
 
 
 @app.route('/dirscan', methods=['GET', 'POST'])
+@login_required
 def dirscan():
     results, url = None, ''
     if request.method == 'POST':

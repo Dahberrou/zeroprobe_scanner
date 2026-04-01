@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register — ZeroProbe</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
+  <style>
+    body { display:flex; align-items:center; justify-content:center; min-height:100vh; background:var(--bg-base); }
+    .auth-card {
+      background:var(--bg-panel); border:1px solid var(--border); border-radius:14px;
+      padding:40px 36px; width:100%; max-width:400px;
+    }
+    .auth-logo { display:flex; align-items:center; gap:10px; margin-bottom:28px; }
+    .auth-logo-name { font-size:20px; font-weight:700; color:var(--text-primary); }
+    .auth-logo-name span { color:#3B82F6; }
+    .auth-title { font-size:22px; font-weight:700; color:var(--text-primary); margin-bottom:4px; }
+    .auth-sub   { font-size:13px; color:var(--text-muted); margin-bottom:24px; }
+    .field-label { font-size:12px; color:var(--text-muted); margin-bottom:6px; display:block; }
+    .field-input {
+      width:100%; padding:10px 12px; border-radius:8px;
+      border:1px solid var(--border); background:var(--bg-base);
+      color:var(--text-primary); font-size:14px; box-sizing:border-box;
+      outline:none; margin-bottom:16px;
+    }
+    .field-input:focus { border-color:#3B82F6; }
+    .btn-primary {
+      width:100%; padding:11px; border-radius:8px; border:none;
+      background:#3B82F6; color:#fff; font-size:14px; font-weight:600;
+      cursor:pointer; margin-top:4px;
+    }
+    .btn-primary:hover { background:#2563EB; }
+    .auth-footer { text-align:center; margin-top:20px; font-size:13px; color:var(--text-muted); }
+    .auth-footer a { color:#3B82F6; text-decoration:none; }
+    .flash-error {
+      background:#450a0a; border:1px solid #7f1d1d; color:#fca5a5;
+      border-radius:8px; padding:10px 14px; font-size:13px; margin-bottom:16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-card">
+    <div class="auth-logo">
+      <svg width="24" height="28" viewBox="0 0 28 32" fill="none">
+        <path d="M14 0L0 5.6V16.8C0 24.64 6.3 31.36 14 32C21.7 31.36 28 24.64 28 16.8V5.6L14 0Z" fill="url(#ag2)"/>
+        <circle cx="14" cy="16" r="4" stroke="white" stroke-width="1.5" fill="none"/>
+        <circle cx="14" cy="16" r="1.5" fill="white"/>
+        <defs>
+          <linearGradient id="ag2" x1="0" y1="0" x2="28" y2="32" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#3B82F6"/>
+            <stop offset="100%" stop-color="#06B6D4"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <div class="auth-logo-name">Zero<span>Probe</span></div>
+    </div>
+
+    <div class="auth-title">Create account</div>
+    <div class="auth-sub">Start scanning with your own workspace</div>
+
+    {% with messages = get_flashed_messages(category_filter=["error"]) %}
+      {% if messages %}
+        {% for msg in messages %}
+          <div class="flash-error"><i class="fa-solid fa-circle-exclamation" style="margin-right:6px;"></i>{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST">
+      <label class="field-label">Username</label>
+      <input class="field-input" type="text" name="username" required autocomplete="username" placeholder="johndoe">
+
+      <label class="field-label">Email</label>
+      <input class="field-input" type="email" name="email" required autocomplete="email" placeholder="you@example.com">
+
+      <label class="field-label">Password</label>
+      <input class="field-input" type="password" name="password" required autocomplete="new-password" placeholder="••••••••">
+
+      <label class="field-label">Confirm Password</label>
+      <input class="field-input" type="password" name="confirm_password" required autocomplete="new-password" placeholder="••••••••">
+
+      <button class="btn-primary" type="submit">Create Account</button>
+    </form>
+
+    <div class="auth-footer">
+      Already have an account? <a href="{{ url_for('login') }}">Sign in</a>
+    </div>
+  </div>
+</body>
+</html>

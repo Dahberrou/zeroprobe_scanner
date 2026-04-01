@@ -96,6 +96,27 @@
         <span class="live-dot"></span>
         Scanner Active
       </div>
+      {% if current_user.is_authenticated %}
+        <span style="color:var(--text-muted);font-size:13px;margin-left:12px;">
+          <i class="fa-solid fa-user" style="margin-right:4px;"></i>{{ current_user.username }}
+        </span>
+        <a href="{{ url_for('logout') }}"
+           style="margin-left:10px;font-size:12px;padding:4px 10px;border-radius:6px;
+                  background:var(--border);color:var(--text-muted);text-decoration:none;">
+          Logout
+        </a>
+      {% else %}
+        <a href="{{ url_for('login') }}"
+           style="margin-left:10px;font-size:12px;padding:4px 10px;border-radius:6px;
+                  background:var(--border);color:var(--text-muted);text-decoration:none;">
+          Login
+        </a>
+        <a href="{{ url_for('register') }}"
+           style="margin-left:6px;font-size:12px;padding:4px 10px;border-radius:6px;
+                  background:#3B82F6;color:#fff;text-decoration:none;">
+          Register
+        </a>
+      {% endif %}
     </div>
   </header>
 
