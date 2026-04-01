@@ -133,20 +133,21 @@ def logout():
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 @app.route('/')
-@login_required
 def home():
-    q = ScanRecord.query.filter_by(user_id=current_user.id)
-    recent = q.order_by(ScanRecord.timestamp.desc()).limit(5).all()
-    stats = {
-        'total':    q.count(),
-        'critical': q.filter_by(severity='critical').count(),
-        'high':     q.filter_by(severity='high').count(),
-    }
+    recent = []
+    stats = {'total': 0, 'critical': 0, 'high': 0}
+    if current_user.is_authenticated:
+        q = ScanRecord.query.filter_by(user_id=current_user.id)
+        recent = q.order_by(ScanRecord.timestamp.desc()).limit(5).all()
+        stats = {
+            'total':    q.count(),
+            'critical': q.filter_by(severity='critical').count(),
+            'high':     q.filter_by(severity='high').count(),
+        }
     return render_template('index.html', recent=recent, stats=stats)
 
 
 @app.route('/scan', methods=['POST'])
-@login_required
 def scan():
     url = request.form.get('url', '').strip()
     if not url:
@@ -159,7 +160,8 @@ def scan():
         'status': 'running', 'progress': 0,
         'stage': 'Initializing scanner...', 'logs': []
     }
-    _owner_id = current_user.id  # capture before thread (request context won't exist inside thread)
+    save_to_db = current_user.is_authenticated
+    _owner_id = current_user.id if save_to_db else None  # capture before thread
 
     def _log(msg):
         ts = datetime.now().strftime('%H:%M:%S')
@@ -199,32 +201,45 @@ def scan():
             _log("Running AI-powered vulnerability analysis...")
             ai = generate_ai_report(report)
 
-            _progress[scan_id].update({'progress': 95, 'stage': 'Persisting scan record...'})
-
-            with app.app_context():
-                rec = ScanRecord(
-                    target_url=url,
-                    scan_type='full',
-                    severity=severity['level'].lower(),
-                    risk_score=severity['issues'],
-                    xss_count=xss_found,
-                    sqli_count=sqli_found,
-                    headers_missing=missing,
-                    report_json=json.dumps(report),
-                    ai_analysis=ai,
-                    duration_s=round(time.time() - start, 1),
-                    user_id=_owner_id
-                )
-                db.session.add(rec)
-                db.session.commit()
-                record_id = rec.id
-
             elapsed = round(time.time() - start, 1)
-            _log(f"Scan complete in {elapsed}s — record #{record_id} saved")
-            _progress[scan_id].update({
-                'status': 'done', 'progress': 100,
-                'stage': 'Scan complete!', 'record_id': record_id
-            })
+
+            if save_to_db:
+                _progress[scan_id].update({'progress': 95, 'stage': 'Persisting scan record...'})
+                with app.app_context():
+                    rec = ScanRecord(
+                        target_url=url,
+                        scan_type='full',
+                        severity=severity['level'].lower(),
+                        risk_score=severity['issues'],
+                        xss_count=xss_found,
+                        sqli_count=sqli_found,
+                        headers_missing=missing,
+                        report_json=json.dumps(report),
+                        ai_analysis=ai,
+                        duration_s=elapsed,
+                        user_id=_owner_id
+                    )
+                    db.session.add(rec)
+                    db.session.commit()
+                    record_id = rec.id
+                _log(f"Scan complete in {elapsed}s — record #{record_id} saved")
+                _progress[scan_id].update({
+                    'status': 'done', 'progress': 100,
+                    'stage': 'Scan complete!', 'record_id': record_id
+                })
+            else:
+                _progress[scan_id].update({'progress': 95, 'stage': 'Finalizing results...'})
+                _log(f"Scan complete in {elapsed}s — login to save results")
+                _progress[scan_id].update({
+                    'status': 'done', 'progress': 100,
+                    'stage': 'Scan complete!',
+                    'temp_scan_id': scan_id,
+                    'temp_report': {
+                        'url': url, 'xss': xss, 'sqli': sqli,
+                        'headers': headers, 'severity': severity,
+                        'ai': ai, 'duration_s': elapsed
+                    }
+                })
 
         except Exception as e:
             _log(f"Error: {e}")
@@ -235,7 +250,6 @@ def scan():
 
 
 @app.route('/scan-progress/<scan_id>')
-@login_required
 def scan_progress(scan_id):
     def stream():
         while True:
@@ -250,24 +264,39 @@ def scan_progress(scan_id):
     )
 
 
+@app.route('/report/temp/<scan_id>')
+def report_temp(scan_id):
+    data = _progress.get(scan_id)
+    if not data or 'temp_report' not in data:
+        abort(404)
+    t = data['temp_report']
+    report_data = {'url': t['url'], 'xss': t['xss'], 'sqli': t['sqli'], 'headers': t['headers']}
+    sev = calculate_severity(report_data)
+    return render_template('report.html', record=None, report=report_data,
+                           severity=sev, ai=t['ai'],
+                           temp=True, temp_scan_id=scan_id,
+                           duration_s=t['duration_s'])
+
+
 @app.route('/report/<int:record_id>')
-@login_required
 def report(record_id):
     rec = ScanRecord.query.get_or_404(record_id)
-    if rec.user_id != current_user.id:
-        abort(403)
+    if rec.user_id is not None:
+        if not current_user.is_authenticated or rec.user_id != current_user.id:
+            abort(403)
     report_data = json.loads(rec.report_json)
     sev = calculate_severity(report_data)
-    return render_template('report.html', record=rec,
-                           report=report_data, severity=sev, ai=rec.ai_analysis)
+    return render_template('report.html', record=rec, report=report_data,
+                           severity=sev, ai=rec.ai_analysis,
+                           temp=False, duration_s=rec.duration_s)
 
 
 @app.route('/report/<int:record_id>/pdf')
-@login_required
 def download_pdf(record_id):
     rec = ScanRecord.query.get_or_404(record_id)
-    if rec.user_id != current_user.id:
-        abort(403)
+    if rec.user_id is not None:
+        if not current_user.is_authenticated or rec.user_id != current_user.id:
+            abort(403)
     report_data = json.loads(rec.report_json)
     sev = calculate_severity(report_data)
     path = generate_pdf(report=report_data, severity=sev, ai_report=rec.ai_analysis)
@@ -276,8 +305,9 @@ def download_pdf(record_id):
 
 
 @app.route('/dashboard')
-@login_required
 def dashboard():
+    if not current_user.is_authenticated:
+        return render_template('dashboard.html', stats=None, recent=[], daily_json='[]', severity_json='{}')
     from sqlalchemy import func
     uid = current_user.id
     base_q = ScanRecord.query.filter_by(user_id=uid)
@@ -313,8 +343,9 @@ def dashboard():
 
 
 @app.route('/history')
-@login_required
 def history():
+    if not current_user.is_authenticated:
+        return render_template('history.html', records=None, sev_filter='')
     page       = request.args.get('page', 1, type=int)
     sev_filter = request.args.get('severity', '')
     q = ScanRecord.query.filter_by(user_id=current_user.id).order_by(ScanRecord.timestamp.desc())
@@ -325,7 +356,6 @@ def history():
 
 
 @app.route('/subdomains', methods=['GET', 'POST'])
-@login_required
 def subdomains():
     results, domain = None, ''
     if request.method == 'POST':
@@ -337,7 +367,6 @@ def subdomains():
 
 
 @app.route('/dirscan', methods=['GET', 'POST'])
-@login_required
 def dirscan():
     results, url = None, ''
     if request.method == 'POST':

@@ -1,31 +1,47 @@
 {% extends "base.html" %}
-{% block title %}Report #{{ record.id }}{% endblock %}
+{% block title %}{% if record %}Report #{{ record.id }}{% else %}Scan Report{% endif %}{% endblock %}
 {% block breadcrumb_parent %}<a href="{{ url_for('history') }}" style="color:var(--text-muted);text-decoration:none">History</a>{% endblock %}
-{% block breadcrumb_cur %}Report #{{ record.id }}{% endblock %}
+{% block breadcrumb_cur %}{% if record %}Report #{{ record.id }}{% else %}Scan Report{% endif %}{% endblock %}
 
 {% block content %}
+
+{% if temp %}
+<div style="margin-bottom:16px;padding:11px 16px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:8px;font-size:13px;color:#93C5FD;display:flex;align-items:center;gap:10px" class="fade-up">
+  <i class="fa-solid fa-circle-info"></i>
+  <span>These results are <strong>temporary</strong> and will not be saved.</span>
+  <a href="{{ url_for('login') }}" style="margin-left:auto;padding:4px 12px;background:#3B82F6;color:#fff;border-radius:6px;text-decoration:none;font-size:12px;white-space:nowrap">Login to Save</a>
+</div>
+{% endif %}
 
 <!-- ── Report Header ───────────────────────────────────────────────────────── -->
 <div class="report-header fade-up">
   <div class="flex-b" style="flex-wrap:wrap;gap:12px">
     <div>
       <div class="report-title"><i class="fa-solid fa-file-shield" style="color:var(--cyan);margin-right:8px"></i>Security Assessment Report</div>
-      <div class="url-chip mt-2" style="display:inline-block">{{ record.target_url }}</div>
+      <div class="url-chip mt-2" style="display:inline-block">{{ report.url }}</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <span class="sev-badge-xl sev-{{ record.severity }}">{{ severity.level }}</span>
+      <span class="sev-badge-xl sev-{{ severity.level | lower }}">{{ severity.level }}</span>
+      {% if not temp %}
       <a href="{{ url_for('download_pdf', record_id=record.id) }}" class="btn btn-ghost">
         <i class="fa-solid fa-file-pdf"></i> Download PDF
       </a>
+      {% endif %}
       <a href="{{ url_for('home') }}" class="btn btn-primary">
         <i class="fa-solid fa-plus"></i> New Scan
       </a>
     </div>
   </div>
   <div class="report-meta">
+    {% if record %}
     <div class="meta-item"><i class="fa-solid fa-calendar"></i> {{ record.timestamp.strftime('%Y-%m-%d %H:%M UTC') }}</div>
-    <div class="meta-item"><i class="fa-solid fa-stopwatch"></i> {{ record.duration_s }}s scan duration</div>
+    {% endif %}
+    <div class="meta-item"><i class="fa-solid fa-stopwatch"></i> {{ duration_s }}s scan duration</div>
+    {% if record %}
     <div class="meta-item"><i class="fa-solid fa-hashtag"></i> Record #{{ record.id }}</div>
+    {% else %}
+    <div class="meta-item"><i class="fa-solid fa-clock"></i> Temporary — not saved</div>
+    {% endif %}
     <div class="meta-item"><i class="fa-solid fa-gauge-high"></i> Risk Score: <strong style="color:var(--text);margin-left:3px">{{ severity.issues }}</strong></div>
   </div>
 </div>

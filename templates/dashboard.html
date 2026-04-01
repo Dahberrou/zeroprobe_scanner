@@ -9,6 +9,16 @@
   <div class="page-subtitle">Aggregate scan statistics, severity trends, and recent activity</div>
 </div>
 
+{% if not current_user.is_authenticated %}
+<div class="card fade-up" style="text-align:center;padding:48px 24px">
+  <i class="fa-solid fa-chart-pie" style="font-size:36px;color:var(--text-dim);margin-bottom:14px;display:block"></i>
+  <div style="font-size:17px;font-weight:600;color:var(--text);margin-bottom:8px">Login to access your dashboard</div>
+  <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Your personal dashboard shows scan statistics, severity trends, and history — available when logged in.</div>
+  <a href="{{ url_for('login') }}" class="btn btn-primary">Login</a>
+  <a href="{{ url_for('register') }}" class="btn btn-ghost" style="margin-left:8px">Create Account</a>
+</div>
+{% else %}
+
 <!-- ── Stats Row ──────────────────────────────────────────────────────────── -->
 <div class="grid-4 mb-4 fade-up" style="animation-delay:.03s">
   <div class="stat-card">
@@ -122,6 +132,8 @@
   </div>
   {% endif %}
 </div>
+
+{% endif %}{# end auth gate #}
 
 {% endblock %}
 

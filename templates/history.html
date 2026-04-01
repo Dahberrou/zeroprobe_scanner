@@ -9,6 +9,16 @@
   <div class="page-subtitle">All recorded vulnerability scans, filterable by severity</div>
 </div>
 
+{% if not current_user.is_authenticated %}
+<div class="card fade-up" style="text-align:center;padding:48px 24px">
+  <i class="fa-solid fa-lock" style="font-size:36px;color:var(--text-dim);margin-bottom:14px;display:block"></i>
+  <div style="font-size:17px;font-weight:600;color:var(--text);margin-bottom:8px">Login to view scan history</div>
+  <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Scan results are saved automatically when you're logged in. Run scans as a guest to try it out.</div>
+  <a href="{{ url_for('login') }}" class="btn btn-primary">Login</a>
+  <a href="{{ url_for('register') }}" class="btn btn-ghost" style="margin-left:8px">Create Account</a>
+</div>
+{% else %}
+
 <!-- ── Filters ────────────────────────────────────────────────────────────── -->
 <div class="card mb-4 fade-up">
   <form method="GET" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -129,5 +139,7 @@
   </div>
   {% endif %}
 </div>
+
+{% endif %}{# end auth gate #}
 
 {% endblock %}
