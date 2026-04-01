@@ -73,6 +73,12 @@ class ScanRecord(db.Model):
 
 with app.app_context():
     db.create_all()
+    # Migration: add user_id column if it doesn't exist (safe, non-destructive)
+    with db.engine.connect() as conn:
+        columns = [row[1] for row in conn.execute(db.text("PRAGMA table_info(scan_records)")).fetchall()]
+        if 'user_id' not in columns:
+            conn.execute(db.text("ALTER TABLE scan_records ADD COLUMN user_id INTEGER"))
+            conn.commit()
 
 # ── In-memory SSE progress store ──────────────────────────────────────────────
 _progress: dict = {}
