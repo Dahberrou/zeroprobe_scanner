@@ -7,28 +7,28 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
   <style>
-    body { display:flex; align-items:center; justify-content:center; min-height:100vh; background:var(--bg-base); }
+    body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:16px; background:var(--bg); }
     .auth-card {
-      background:var(--bg-panel); border:1px solid var(--border); border-radius:14px;
+      background:var(--bg-card); border:1px solid var(--border); border-radius:14px;
       padding:40px 36px; width:100%; max-width:400px;
     }
     .auth-logo { display:flex; align-items:center; gap:10px; margin-bottom:28px; }
-    .auth-logo-name { font-size:20px; font-weight:700; color:var(--text-primary); }
+    .auth-logo-name { font-size:20px; font-weight:700; color:var(--text); }
     .auth-logo-name span { color:#3B82F6; }
-    .auth-title { font-size:22px; font-weight:700; color:var(--text-primary); margin-bottom:4px; }
+    .auth-title { font-size:22px; font-weight:700; color:var(--text); margin-bottom:4px; }
     .auth-sub   { font-size:13px; color:var(--text-muted); margin-bottom:24px; }
     .field-label { font-size:12px; color:var(--text-muted); margin-bottom:6px; display:block; }
     .field-input {
       width:100%; padding:10px 12px; border-radius:8px;
-      border:1px solid var(--border); background:var(--bg-base);
-      color:var(--text-primary); font-size:14px; box-sizing:border-box;
-      outline:none; margin-bottom:16px;
+      border:1px solid var(--border); background:var(--bg-input);
+      color:var(--text); font-size:14px; box-sizing:border-box;
+      outline:none; margin-bottom:16px; transition:border-color .2s;
     }
-    .field-input:focus { border-color:#3B82F6; }
+    .field-input:focus { border-color:#3B82F6; box-shadow:0 0 0 3px rgba(59,130,246,0.1); }
     .btn-primary {
       width:100%; padding:11px; border-radius:8px; border:none;
       background:#3B82F6; color:#fff; font-size:14px; font-weight:600;
-      cursor:pointer; margin-top:4px;
+      cursor:pointer; margin-top:4px; transition:background .2s;
     }
     .btn-primary:hover { background:#2563EB; }
     .auth-footer { text-align:center; margin-top:20px; font-size:13px; color:var(--text-muted); }

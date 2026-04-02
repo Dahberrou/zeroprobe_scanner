@@ -78,6 +78,9 @@
   </div>
 </aside>
 
+<!-- Sidebar backdrop (mobile) -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
 <!-- ── MAIN ─────────────────────────────────────────────────────────────────── -->
 <div class="main-wrap">
 
@@ -130,11 +133,5 @@
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 {% block extra_scripts %}{% endblock %}
 
-<style>
-  /* Mobile sidebar toggle visibility */
-  @media (max-width: 900px) {
-    #sidebarToggle { display: block !important; }
-  }
-</style>
 </body>
 </html>
