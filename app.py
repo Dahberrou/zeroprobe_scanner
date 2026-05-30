@@ -12,14 +12,14 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import (LoginManager, UserMixin, login_user,
                          logout_user, login_required, current_user)
 from werkzeug.security import generate_password_hash, check_password_hash
-from scanner.xss_scanner     import scan_xss
-from scanner.sqli_scanner    import scan_sqli
-from scanner.headers_scanner import scan_headers
+from scanner.xss_scanner       import scan_xss
+from scanner.sqli_scanner      import scan_sqli
+from scanner.headers_scanner   import scan_headers
 from scanner.subdomain_scanner import run_subdomain_scan
 from scanner.dir_scanner       import run_dir_scan
-from utils.ai_report    import generate_ai_report
-from utils.severity     import calculate_severity
-from utils.pdf_report   import generate_pdf
+from utils.ai_report  import generate_ai_report
+from utils.severity   import calculate_severity
+from utils.pdf_report import generate_pdf
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'zeroprobe-dev-secret-change-in-prod')
@@ -33,6 +33,7 @@ login_manager.login_message = 'Please log in to access this page.'
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
+
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id            = db.Column(db.Integer, primary_key=True)
@@ -40,6 +41,9 @@ class User(UserMixin, db.Model):
     email         = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active     = db.Column(db.Boolean, default=True, nullable=False)
+    role          = db.Column(db.String(20), default='user', nullable=False)
+    last_login    = db.Column(db.DateTime, nullable=True)
     scans         = db.relationship('ScanRecord', backref='owner', lazy=True)
 
     def set_password(self, password):
@@ -65,26 +69,285 @@ class ScanRecord(db.Model):
     xss_count       = db.Column(db.Integer, default=0)
     sqli_count      = db.Column(db.Integer, default=0)
     headers_missing = db.Column(db.Integer, default=0)
-    report_json     = db.Column(db.Text)
-    ai_analysis     = db.Column(db.Text)
     duration_s      = db.Column(db.Float, default=0.0)
     user_id         = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    report          = db.relationship('Report', backref='scan', uselist=False,
+                                      cascade='all, delete-orphan')
+    xss_findings    = db.relationship('XssFinding', backref='scan', lazy=True,
+                                      cascade='all, delete-orphan')
+    sqli_findings   = db.relationship('SqliFinding', backref='scan', lazy=True,
+                                      cascade='all, delete-orphan')
+    header_findings = db.relationship('HeaderFinding', backref='scan', lazy=True,
+                                      cascade='all, delete-orphan')
+
+
+class Report(db.Model):
+    __tablename__ = 'reports'
+    id           = db.Column(db.Integer, primary_key=True)
+    scan_id      = db.Column(db.Integer, db.ForeignKey('scan_records.id'),
+                             nullable=False, unique=True)
+    ai_analysis  = db.Column(db.Text)
+    generated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    pdf_path     = db.Column(db.String(500), nullable=True)
+
+
+class XssFinding(db.Model):
+    __tablename__ = 'xss_findings'
+    id             = db.Column(db.Integer, primary_key=True)
+    scan_id        = db.Column(db.Integer, db.ForeignKey('scan_records.id'), nullable=False)
+    payload        = db.Column(db.Text)
+    parameter      = db.Column(db.String(100))
+    vuln_type      = db.Column('type', db.String(100))
+    vulnerable     = db.Column(db.Boolean, default=False)
+    risk           = db.Column(db.String(20))
+    url            = db.Column(db.Text)
+    status_code    = db.Column(db.Integer)
+    description    = db.Column(db.Text)
+    recommendation = db.Column(db.Text)
+    error          = db.Column(db.Text)
+
+
+class SqliFinding(db.Model):
+    __tablename__ = 'sqli_findings'
+    id             = db.Column(db.Integer, primary_key=True)
+    scan_id        = db.Column(db.Integer, db.ForeignKey('scan_records.id'), nullable=False)
+    payload        = db.Column(db.Text)
+    parameter      = db.Column(db.String(100))
+    vuln_type      = db.Column('type', db.String(100))
+    technique      = db.Column(db.String(100))
+    vulnerable     = db.Column(db.Boolean, default=False)
+    risk           = db.Column(db.String(20))
+    db_type        = db.Column(db.String(50))
+    detection      = db.Column(db.String(50))
+    url            = db.Column(db.Text)
+    status_code    = db.Column(db.Integer)
+    description    = db.Column(db.Text)
+    recommendation = db.Column(db.Text)
+    error          = db.Column(db.Text)
+
+
+class HeaderFinding(db.Model):
+    __tablename__ = 'header_findings'
+    id             = db.Column(db.Integer, primary_key=True)
+    scan_id        = db.Column(db.Integer, db.ForeignKey('scan_records.id'), nullable=False)
+    header         = db.Column(db.String(100))
+    status         = db.Column(db.String(20))
+    risk           = db.Column(db.String(20))
+    value          = db.Column(db.Text)
+    description    = db.Column(db.Text)
+    recommendation = db.Column(db.Text)
+    impact         = db.Column(db.Text)
+    error          = db.Column(db.Text)
+
+
+# ── Database initialization & migration ───────────────────────────────────────
+
+def _run_migrations():
+    with db.engine.connect() as conn:
+
+        # ── users: add new columns if missing ────────────────────────────────
+        user_cols = {r[1] for r in conn.execute(
+            db.text("PRAGMA table_info(users)")).fetchall()}
+        for col, ddl in [
+            ('is_active', "ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1"),
+            ('role',      "ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user'"),
+            ('last_login',"ALTER TABLE users ADD COLUMN last_login DATETIME"),
+        ]:
+            if col not in user_cols:
+                conn.execute(db.text(ddl))
+
+        # ── scan_records: migrate blobs → normalized tables, then rebuild ────
+        sc_cols = {r[1] for r in conn.execute(
+            db.text("PRAGMA table_info(scan_records)")).fetchall()}
+
+        if 'report_json' in sc_cols:
+            rows = conn.execute(db.text(
+                "SELECT id, report_json, ai_analysis FROM scan_records"
+            )).fetchall()
+
+            for scan_id, report_json, ai_analysis in rows:
+                # Create Report row
+                if not conn.execute(db.text(
+                    "SELECT 1 FROM reports WHERE scan_id = :sid"
+                ), {"sid": scan_id}).fetchone():
+                    conn.execute(db.text(
+                        "INSERT INTO reports (scan_id, ai_analysis, generated_at)"
+                        " VALUES (:sid, :ai, :ts)"
+                    ), {"sid": scan_id, "ai": ai_analysis, "ts": datetime.utcnow()})
+
+                if not report_json:
+                    continue
+                try:
+                    data = json.loads(report_json)
+                except Exception:
+                    continue
+
+                # XSS findings
+                if not conn.execute(db.text(
+                    "SELECT 1 FROM xss_findings WHERE scan_id = :sid"
+                ), {"sid": scan_id}).fetchone():
+                    for x in data.get('xss', []):
+                        conn.execute(db.text("""
+                            INSERT INTO xss_findings
+                              (scan_id, payload, parameter, type, vulnerable,
+                               risk, url, status_code, description, recommendation, error)
+                            VALUES
+                              (:sid, :payload, :param, :type, :vuln,
+                               :risk, :url, :sc, :desc, :rec, :err)
+                        """), {
+                            "sid": scan_id,
+                            "payload": x.get('payload'),  "param": x.get('parameter'),
+                            "type":    x.get('type'),     "vuln":  bool(x.get('vulnerable')),
+                            "risk":    x.get('risk'),     "url":   x.get('url'),
+                            "sc":      x.get('status'),   "desc":  x.get('description'),
+                            "rec":     x.get('recommendation'), "err": x.get('error'),
+                        })
+
+                # SQLi findings
+                if not conn.execute(db.text(
+                    "SELECT 1 FROM sqli_findings WHERE scan_id = :sid"
+                ), {"sid": scan_id}).fetchone():
+                    for s in data.get('sqli', []):
+                        conn.execute(db.text("""
+                            INSERT INTO sqli_findings
+                              (scan_id, payload, parameter, type, technique, vulnerable,
+                               risk, db_type, detection, url, status_code,
+                               description, recommendation, error)
+                            VALUES
+                              (:sid, :payload, :param, :type, :tech, :vuln,
+                               :risk, :dbt, :det, :url, :sc,
+                               :desc, :rec, :err)
+                        """), {
+                            "sid":     scan_id,
+                            "payload": s.get('payload'),  "param": s.get('parameter'),
+                            "type":    s.get('type'),     "tech":  s.get('technique'),
+                            "vuln":    bool(s.get('vulnerable')), "risk": s.get('risk'),
+                            "dbt":     s.get('db_type'),  "det":   s.get('detection'),
+                            "url":     s.get('url'),      "sc":    s.get('status'),
+                            "desc":    s.get('description'), "rec": s.get('recommendation'),
+                            "err":     s.get('error'),
+                        })
+
+                # Header findings
+                if not conn.execute(db.text(
+                    "SELECT 1 FROM header_findings WHERE scan_id = :sid"
+                ), {"sid": scan_id}).fetchone():
+                    for h in data.get('headers', []):
+                        conn.execute(db.text("""
+                            INSERT INTO header_findings
+                              (scan_id, header, status, risk, value,
+                               description, recommendation, impact, error)
+                            VALUES
+                              (:sid, :hdr, :status, :risk, :val,
+                               :desc, :rec, :impact, :err)
+                        """), {
+                            "sid":    scan_id,     "hdr":    h.get('header'),
+                            "status": h.get('status'), "risk": h.get('risk'),
+                            "val":    h.get('value'),  "desc": h.get('description'),
+                            "rec":    h.get('recommendation'), "impact": h.get('impact'),
+                            "err":    h.get('error'),
+                        })
+
+            conn.commit()
+
+            # Recreate scan_records without blob columns
+            conn.execute(db.text("DROP TABLE IF EXISTS scan_records_new"))
+            conn.execute(db.text("""
+                CREATE TABLE scan_records_new (
+                    id              INTEGER PRIMARY KEY,
+                    target_url      VARCHAR(500) NOT NULL,
+                    scan_type       VARCHAR(50)  DEFAULT 'full',
+                    timestamp       DATETIME,
+                    severity        VARCHAR(20)  DEFAULT 'low',
+                    risk_score      INTEGER      DEFAULT 0,
+                    xss_count       INTEGER      DEFAULT 0,
+                    sqli_count      INTEGER      DEFAULT 0,
+                    headers_missing INTEGER      DEFAULT 0,
+                    duration_s      FLOAT        DEFAULT 0.0,
+                    user_id         INTEGER REFERENCES users(id)
+                )
+            """))
+            # Only copy columns that actually exist in the old table
+            old_cols = {r[1] for r in conn.execute(
+                db.text("PRAGMA table_info(scan_records)")).fetchall()}
+            copy_cols = [c for c in [
+                'id', 'target_url', 'scan_type', 'timestamp', 'severity',
+                'risk_score', 'xss_count', 'sqli_count', 'headers_missing',
+                'duration_s', 'user_id',
+            ] if c in old_cols]
+            cols_sql = ', '.join(copy_cols)
+            conn.execute(db.text(
+                f"INSERT INTO scan_records_new ({cols_sql}) SELECT {cols_sql} FROM scan_records"
+            ))
+            conn.execute(db.text("DROP TABLE scan_records"))
+            conn.execute(db.text("ALTER TABLE scan_records_new RENAME TO scan_records"))
+            conn.commit()
+
+        # ── Indexes (idempotent) ──────────────────────────────────────────────
+        conn.execute(db.text(
+            "CREATE INDEX IF NOT EXISTS ix_scan_user_ts  ON scan_records(user_id, timestamp)"))
+        conn.execute(db.text(
+            "CREATE INDEX IF NOT EXISTS ix_scan_user_sev ON scan_records(user_id, severity)"))
+        conn.commit()
 
 
 with app.app_context():
     db.create_all()
-    # Migration: add user_id column if it doesn't exist (safe, non-destructive)
-    with db.engine.connect() as conn:
-        columns = [row[1] for row in conn.execute(db.text("PRAGMA table_info(scan_records)")).fetchall()]
-        if 'user_id' not in columns:
-            conn.execute(db.text("ALTER TABLE scan_records ADD COLUMN user_id INTEGER"))
-            conn.commit()
+    _run_migrations()
+
 
 # ── In-memory SSE progress store ──────────────────────────────────────────────
 _progress: dict = {}
 
 
+# ── Helper ────────────────────────────────────────────────────────────────────
+
+def _build_report_dict(rec: ScanRecord) -> dict:
+    """Reconstruct the report dict from normalized tables (same shape templates expect)."""
+    return {
+        'url': rec.target_url,
+        'xss': [{
+            'payload':        f.payload,
+            'parameter':      f.parameter,
+            'type':           f.vuln_type,
+            'vulnerable':     f.vulnerable,
+            'risk':           f.risk,
+            'url':            f.url,
+            'status':         f.status_code,
+            'description':    f.description,
+            'recommendation': f.recommendation,
+            'error':          f.error,
+        } for f in rec.xss_findings],
+        'sqli': [{
+            'payload':        f.payload,
+            'parameter':      f.parameter,
+            'type':           f.vuln_type,
+            'technique':      f.technique,
+            'vulnerable':     f.vulnerable,
+            'risk':           f.risk,
+            'db_type':        f.db_type,
+            'detection':      f.detection,
+            'url':            f.url,
+            'status':         f.status_code,
+            'description':    f.description,
+            'recommendation': f.recommendation,
+            'error':          f.error,
+        } for f in rec.sqli_findings],
+        'headers': [{
+            'header':         f.header,
+            'status':         f.status,
+            'risk':           f.risk,
+            'value':          f.value,
+            'description':    f.description,
+            'recommendation': f.recommendation,
+            'impact':         f.impact,
+            'error':          f.error,
+        } for f in rec.header_findings],
+    }
+
+
 # ── Auth Routes ───────────────────────────────────────────────────────────────
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
@@ -123,6 +386,8 @@ def login():
         user = (User.query.filter_by(email=identifier.lower()).first() or
                 User.query.filter_by(username=identifier).first())
         if user and user.check_password(password):
+            user.last_login = datetime.utcnow()
+            db.session.commit()
             login_user(user, remember=request.form.get('remember') == 'on')
             next_page = request.args.get('next')
             return redirect(next_page or url_for('home'))
@@ -138,6 +403,7 @@ def logout():
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 @app.route('/')
 def home():
     recent = []
@@ -167,7 +433,7 @@ def scan():
         'stage': 'Initializing scanner...', 'logs': []
     }
     save_to_db = current_user.is_authenticated
-    _owner_id = current_user.id if save_to_db else None  # capture before thread
+    _owner_id  = current_user.id if save_to_db else None
 
     def _log(msg):
         ts = datetime.now().strftime('%H:%M:%S')
@@ -220,14 +486,66 @@ def scan():
                         xss_count=xss_found,
                         sqli_count=sqli_found,
                         headers_missing=missing,
-                        report_json=json.dumps(report),
-                        ai_analysis=ai,
                         duration_s=elapsed,
-                        user_id=_owner_id
+                        user_id=_owner_id,
                     )
                     db.session.add(rec)
+                    db.session.flush()   # populate rec.id before adding children
+
+                    for x in xss:
+                        db.session.add(XssFinding(
+                            scan_id=rec.id,
+                            payload=x.get('payload'),
+                            parameter=x.get('parameter'),
+                            vuln_type=x.get('type'),
+                            vulnerable=bool(x.get('vulnerable')),
+                            risk=x.get('risk'),
+                            url=x.get('url'),
+                            status_code=x.get('status'),
+                            description=x.get('description'),
+                            recommendation=x.get('recommendation'),
+                            error=x.get('error'),
+                        ))
+
+                    for s in sqli:
+                        db.session.add(SqliFinding(
+                            scan_id=rec.id,
+                            payload=s.get('payload'),
+                            parameter=s.get('parameter'),
+                            vuln_type=s.get('type'),
+                            technique=s.get('technique'),
+                            vulnerable=bool(s.get('vulnerable')),
+                            risk=s.get('risk'),
+                            db_type=s.get('db_type'),
+                            detection=s.get('detection'),
+                            url=s.get('url'),
+                            status_code=s.get('status'),
+                            description=s.get('description'),
+                            recommendation=s.get('recommendation'),
+                            error=s.get('error'),
+                        ))
+
+                    for h in headers:
+                        db.session.add(HeaderFinding(
+                            scan_id=rec.id,
+                            header=h.get('header'),
+                            status=h.get('status'),
+                            risk=h.get('risk'),
+                            value=h.get('value'),
+                            description=h.get('description'),
+                            recommendation=h.get('recommendation'),
+                            impact=h.get('impact'),
+                            error=h.get('error'),
+                        ))
+
+                    db.session.add(Report(
+                        scan_id=rec.id,
+                        ai_analysis=ai,
+                        generated_at=datetime.utcnow(),
+                    ))
                     db.session.commit()
                     record_id = rec.id
+
                 _log(f"Scan complete in {elapsed}s — record #{record_id} saved")
                 _progress[scan_id].update({
                     'status': 'done', 'progress': 100,
@@ -243,7 +561,7 @@ def scan():
                     'temp_report': {
                         'url': url, 'xss': xss, 'sqli': sqli,
                         'headers': headers, 'severity': severity,
-                        'ai': ai, 'duration_s': elapsed
+                        'ai': ai, 'duration_s': elapsed,
                     }
                 })
 
@@ -290,10 +608,11 @@ def report(record_id):
     if rec.user_id is not None:
         if not current_user.is_authenticated or rec.user_id != current_user.id:
             abort(403)
-    report_data = json.loads(rec.report_json)
-    sev = calculate_severity(report_data)
+    report_data = _build_report_dict(rec)
+    sev      = calculate_severity(report_data)
+    ai_text  = rec.report.ai_analysis if rec.report else ''
     return render_template('report.html', record=rec, report=report_data,
-                           severity=sev, ai=rec.ai_analysis,
+                           severity=sev, ai=ai_text,
                            temp=False, duration_s=rec.duration_s)
 
 
@@ -303,9 +622,10 @@ def download_pdf(record_id):
     if rec.user_id is not None:
         if not current_user.is_authenticated or rec.user_id != current_user.id:
             abort(403)
-    report_data = json.loads(rec.report_json)
-    sev = calculate_severity(report_data)
-    path = generate_pdf(report=report_data, severity=sev, ai_report=rec.ai_analysis)
+    report_data = _build_report_dict(rec)
+    sev     = calculate_severity(report_data)
+    ai_text = rec.report.ai_analysis if rec.report else ''
+    path    = generate_pdf(report=report_data, severity=sev, ai_report=ai_text)
     return send_file(path, as_attachment=True,
                      download_name=f"zeroprobe_report_{record_id}.pdf")
 
@@ -315,7 +635,7 @@ def dashboard():
     if not current_user.is_authenticated:
         return render_template('dashboard.html', stats=None, recent=[], daily_json='[]', severity_json='{}')
     from sqlalchemy import func
-    uid = current_user.id
+    uid    = current_user.id
     base_q = ScanRecord.query.filter_by(user_id=uid)
     total  = base_q.count()
     by_sev = dict(
@@ -323,7 +643,7 @@ def dashboard():
         .filter(ScanRecord.user_id == uid)
         .group_by(ScanRecord.severity).all()
     )
-    recent = base_q.order_by(ScanRecord.timestamp.desc()).limit(10).all()
+    recent    = base_q.order_by(ScanRecord.timestamp.desc()).limit(10).all()
     daily_raw = (
         db.session.query(
             func.strftime('%Y-%m-%d', ScanRecord.timestamp).label('day'),
@@ -332,7 +652,7 @@ def dashboard():
         .filter(ScanRecord.user_id == uid)
         .group_by('day').order_by('day').limit(14).all()
     )
-    daily = [{'date': r.day, 'count': r.cnt} for r in daily_raw]
+    daily     = [{'date': r.day, 'count': r.cnt} for r in daily_raw]
     avg_score = (db.session.query(func.avg(ScanRecord.risk_score))
                  .filter(ScanRecord.user_id == uid).scalar() or 0)
     stats = {
