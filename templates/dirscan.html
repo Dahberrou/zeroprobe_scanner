@@ -110,10 +110,9 @@
   </div>
   {% else %}
   <div class="empty-state">
-    <i class="fa-solid fa-circle-check" style="color:var(--green)"></i>
-    Scan Completed
-    <p>No hidden directories or files were discovered for this target.</p>
-    <p style="font-size:12px;color:var(--text-dim)">The scan finished successfully with zero findings.</p>
+    <i class="fa-solid fa-folder-open" style="color:var(--green)"></i>
+    No interesting paths discovered.
+    <p>All paths returned 404 or timed out.</p>
   </div>
   {% endif %}
 </div>

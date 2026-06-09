@@ -700,10 +700,7 @@ def dirscan():
         if url:
             if not url.startswith(('http://', 'https://')):
                 url = 'https://' + url
-            try:
-                results = run_dir_scan(url)
-            except Exception:
-                results = []
+            results = run_dir_scan(url)
     return render_template('dirscan.html', results=results, url=url)
 
 
