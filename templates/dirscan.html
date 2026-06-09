@@ -110,9 +110,10 @@
   </div>
   {% else %}
   <div class="empty-state">
-    <i class="fa-solid fa-folder-open" style="color:var(--green)"></i>
-    No interesting paths discovered.
-    <p>All paths returned 404 or timed out.</p>
+    <i class="fa-solid fa-circle-check" style="color:var(--green)"></i>
+    Scan Completed
+    <p>No hidden directories or paths were discovered for the target website.</p>
+    <p style="font-size:12px;color:var(--text-dim)">The scan finished successfully, but no accessible paths matched the current wordlist.</p>
   </div>
   {% endif %}
 </div>
