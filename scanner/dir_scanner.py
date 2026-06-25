@@ -3,6 +3,7 @@
 
 import requests
 import concurrent.futures
+import threading
 import os
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Scanova-AI Scanner)"}
@@ -78,4 +79,38 @@ def run_dir_scan(url: str, workers: int = 25) -> list:
             r = f.result()
             if r:
                 found.append(r)
+    return sorted(found, key=lambda x: x["status"])
+
+
+def run_dir_scan_stream(url: str, on_progress, workers: int = 25) -> list:
+    """Scan the full wordlist with per-path progress callbacks.
+
+    Runs all WORDLIST entries; individual failures are skipped and scanning
+    continues. on_progress(checked, total, found_count) is called periodically.
+    """
+    if not url.startswith(("http://","https://")):
+        url = "https://" + url
+
+    total   = len(WORDLIST)
+    found   = []
+    state   = {"checked": 0}
+    lock    = threading.Lock()
+
+    def _task(path):
+        result = _check(url, path)
+        with lock:
+            state["checked"] += 1
+            if result:
+                found.append(result)
+            if state["checked"] % 25 == 0 or state["checked"] == total:
+                on_progress(state["checked"], total, len(found))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+        futs = {ex.submit(_task, p): p for p in WORDLIST}
+        for f in concurrent.futures.as_completed(futs):
+            try:
+                f.result()
+            except Exception:
+                pass
+
     return sorted(found, key=lambda x: x["status"])

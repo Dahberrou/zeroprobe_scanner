@@ -16,7 +16,7 @@ from scanner.xss_scanner       import scan_xss
 from scanner.sqli_scanner      import scan_sqli
 from scanner.headers_scanner   import scan_headers
 from scanner.subdomain_scanner import run_subdomain_scan
-from scanner.dir_scanner       import run_dir_scan
+from scanner.dir_scanner       import run_dir_scan_stream
 from utils.ai_report  import generate_ai_report
 from utils.severity   import calculate_severity
 from utils.pdf_report import generate_pdf
@@ -296,8 +296,9 @@ with app.app_context():
     _run_migrations()
 
 
-# ── In-memory SSE progress store ──────────────────────────────────────────────
-_progress: dict = {}
+# ── In-memory SSE progress stores ─────────────────────────────────────────────
+_progress:     dict = {}
+_dir_progress: dict = {}
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
@@ -694,14 +695,58 @@ def subdomains():
 
 @app.route('/dirscan', methods=['GET', 'POST'])
 def dirscan():
-    results, url = None, ''
     if request.method == 'POST':
         url = request.form.get('url', '').strip()
-        if url:
-            if not url.startswith(('http://', 'https://')):
-                url = 'https://' + url
-            results = run_dir_scan(url)
-    return render_template('dirscan.html', results=results, url=url)
+        if not url:
+            return jsonify({'error': 'URL required'}), 400
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+
+        scan_id = f"dir_{int(time.time() * 1000)}"
+        _dir_progress[scan_id] = {
+            'status': 'running', 'checked': 0, 'total': 0,
+            'found': 0, 'url': url,
+        }
+
+        def _run():
+            def on_progress(checked, total, found_count):
+                _dir_progress[scan_id].update({
+                    'checked': checked, 'total': total, 'found': found_count,
+                })
+            try:
+                results = run_dir_scan_stream(url, on_progress)
+                _dir_progress[scan_id].update({
+                    'status': 'done', 'results': results, 'found': len(results),
+                })
+            except Exception as e:
+                _dir_progress[scan_id].update({
+                    'status': 'error', 'error': str(e),
+                })
+
+        threading.Thread(target=_run, daemon=True).start()
+        return jsonify({'scan_id': scan_id, 'url': url})
+
+    return render_template('dirscan.html', url='')
+
+
+@app.route('/dirscan-progress/<scan_id>')
+def dirscan_progress(scan_id):
+    def _stream():
+        while True:
+            data = _dir_progress.get(scan_id)
+            if not data:
+                yield f"data: {json.dumps({'status': 'error', 'error': 'Scan not found'})}\n\n"
+                break
+            if data.get('status') in ('done', 'error'):
+                yield f"data: {json.dumps(data)}\n\n"
+                break
+            # Send progress without the (not-yet-complete) results list
+            yield f"data: {json.dumps({k: v for k, v in data.items() if k != 'results'})}\n\n"
+            time.sleep(0.5)
+    return Response(
+        _stream(), mimetype='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
 
 
 @app.route('/about')
