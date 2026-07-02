@@ -46,11 +46,11 @@ function colorizeAI(id) {
 (function injectAIStyles() {
   const s = document.createElement('style');
   s.textContent = `
-    .ai-vuln    { color:#F87171; font-weight:700; display:block; margin-top:4px; }
-    .ai-overall { color:#FCD34D; font-weight:700; display:block; margin-top:8px; }
-    .ai-label   { color:#60A5FA; font-weight:600; }
-    .ai-step    { color:#34D399; display:block; }
-    .ai-sep     { color:#1E293B; display:block; margin:8px 0; }
+    .ai-vuln    { color:#B91C1C; font-weight:700; display:block; margin-top:4px; }
+    .ai-overall { color:#B45309; font-weight:700; display:block; margin-top:8px; }
+    .ai-label   { color:#1D4ED8; font-weight:600; }
+    .ai-step    { color:#047857; display:block; }
+    .ai-sep     { color:#CBD5E1; display:block; margin:8px 0; }
   `;
   document.head.appendChild(s);
 })();
@@ -137,8 +137,8 @@ if (scanForm) {
         } else if (d.temp_scan_id) {
           stageEl.textContent = 'Scan complete! Results are temporary — login to save.';
           const banner = document.createElement('div');
-          banner.style.cssText = 'margin-top:10px;padding:10px 14px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);border-radius:6px;font-size:12.5px;color:#93C5FD;display:flex;align-items:center;gap:10px';
-          banner.innerHTML = `<i class="fa-solid fa-circle-info"></i><span>Login to save your scan results permanently.</span><a href="/login" style="margin-left:auto;padding:3px 10px;background:#3B82F6;color:#fff;border-radius:5px;text-decoration:none;font-size:11.5px">Login</a>`;
+          banner.style.cssText = 'margin-top:10px;padding:10px 14px;background:rgba(37,99,235,0.08);border:1px solid rgba(37,99,235,0.22);border-radius:6px;font-size:12.5px;color:#1D4ED8;display:flex;align-items:center;gap:10px';
+          banner.innerHTML = `<i class="fa-solid fa-circle-info"></i><span>Login to save your scan results permanently.</span><a href="/login" style="margin-left:auto;padding:3px 10px;background:#2563EB;color:#fff;border-radius:5px;text-decoration:none;font-size:11.5px">Login</a>`;
           panel.appendChild(banner);
           setTimeout(() => { window.location.href = `/report/temp/${d.temp_scan_id}`; }, 2000);
         }

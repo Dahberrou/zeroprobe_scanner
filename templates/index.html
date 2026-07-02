@@ -14,9 +14,9 @@
   <div class="scan-hero-title"><i class="fa-solid fa-crosshairs" style="color:var(--cyan);margin-right:8px"></i>Launch New Scan</div>
   <div class="scan-hero-sub">Enter the full target URL including protocol. Ensure you have authorization to scan the target.</div>
   {% if not current_user.is_authenticated %}
-  <div style="margin-bottom:14px;padding:9px 14px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:6px;font-size:12.5px;color:#93C5FD;display:flex;align-items:center;gap:8px">
+  <div style="margin-bottom:14px;padding:9px 14px;background:rgba(37,99,235,0.06);border:1px solid rgba(37,99,235,0.2);border-radius:6px;font-size:12.5px;color:#1D4ED8;display:flex;align-items:center;gap:8px">
     <i class="fa-solid fa-circle-info"></i>
-    <span>You're browsing as a guest. Scan results will <strong>not</strong> be saved. <a href="{{ url_for('login') }}" style="color:#60A5FA;text-decoration:underline">Login</a> or <a href="{{ url_for('register') }}" style="color:#60A5FA;text-decoration:underline">Register</a> to save your history.</span>
+    <span>You're browsing as a guest. Scan results will <strong>not</strong> be saved. <a href="{{ url_for('login') }}" style="color:#1D4ED8;font-weight:600;text-decoration:underline">Login</a> or <a href="{{ url_for('register') }}" style="color:#1D4ED8;font-weight:600;text-decoration:underline">Register</a> to save your history.</span>
   </div>
   {% endif %}
 
